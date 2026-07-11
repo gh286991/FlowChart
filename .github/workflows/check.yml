@@ -15,18 +15,19 @@ jobs:
           node-version: 22
       - run: npm install
       - name: Type check
-        id: typecheck
+        run: npm run type-check
+      - name: Production build
+        id: build
         continue-on-error: true
-        run: npm run type-check 2>&1 | tee typecheck.log
-      - name: Upload type-check log
+        run: npm run build 2>&1 | tee build.log
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+      - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: typecheck-log
-          path: typecheck.log
-      - name: Fail when type-check failed
-        if: steps.typecheck.outcome == 'failure'
+          name: build-log
+          path: build.log
+      - name: Fail when build failed
+        if: steps.build.outcome == 'failure'
         run: exit 1
-      - run: npm run build
-        env:
-          NEXT_PUBLIC_APP_URL: http://localhost:3000

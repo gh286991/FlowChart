@@ -55,8 +55,17 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           python3 - <<'PY'
-          import json, os
+          import json, os, re
           from datetime import datetime, timezone
+
+          log = ""
+          if os.path.exists("deploy.log"):
+              with open("deploy.log", "r", encoding="utf-8", errors="replace") as f:
+                  lines = f.readlines()[-80:]
+              log = "".join(lines)
+              log = re.sub(r"\x1b\[[0-9;]*m", "", log)
+              log = re.sub(r"(?i)(authorization|api[_ -]?token)\s*[:=]\s*\S+", r"\1: [REDACTED]", log)
+              log = log[-6000:]
 
           payload = {
               "status": os.environ.get("DEPLOY_OUTCOME") or "not-run",
@@ -64,6 +73,7 @@ jobs:
               "runUrl": os.environ.get("RUN_URL"),
               "commit": os.environ.get("COMMIT_SHA"),
               "updatedAt": datetime.now(timezone.utc).isoformat(),
+              "logTail": log or None,
           }
           with open("deployment.json", "w", encoding="utf-8") as f:
               json.dump(payload, f, ensure_ascii=False, indent=2)

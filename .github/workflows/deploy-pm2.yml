@@ -1,4 +1,4 @@
-name: Deploy with PM2
+name: Deploy to Cloudflare
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
       - "README.md"
 
 concurrency:
-  group: flowchart-production
+  group: flowchart-cloudflare-production
   cancel-in-progress: false
 
 jobs:
@@ -17,47 +17,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate deployment secrets
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-        run: |
-          test -n "$DEPLOY_HOST" || (echo "Missing DEPLOY_HOST" && exit 1)
-          test -n "$DEPLOY_USER" || (echo "Missing DEPLOY_USER" && exit 1)
-          test -n "$DEPLOY_SSH_KEY" || (echo "Missing DEPLOY_SSH_KEY" && exit 1)
-          test -n "$DEPLOY_PATH" || (echo "Missing DEPLOY_PATH" && exit 1)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
 
-      - name: Configure SSH
+      - name: Validate Cloudflare secrets
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+          WORKERS_SUBDOMAIN: ${{ secrets.WORKERS_SUBDOMAIN }}
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN" && exit 1)
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Missing CLOUDFLARE_ACCOUNT_ID" && exit 1)
+          test -n "$D1_DATABASE_ID" || (echo "Missing D1_DATABASE_ID" && exit 1)
+          test -n "$WORKERS_SUBDOMAIN" || (echo "Missing WORKERS_SUBDOMAIN" && exit 1)
+          sed -i "s/REPLACE_WITH_D1_DATABASE_ID/$D1_DATABASE_ID/g" wrangler.jsonc
+          sed -i "s/REPLACE_WITH_SUBDOMAIN/$WORKERS_SUBDOMAIN/g" wrangler.jsonc
 
-      - name: Upload source
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-        run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
-          rsync -az --delete \
-            --exclude '.git' \
-            --exclude '.env' \
-            --exclude 'node_modules' \
-            --exclude '.next' \
-            ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+      - name: Install dependencies
+        run: npm install
 
-      - name: Migrate, build and reload PM2
+      - name: Type check
+        run: npm run type-check
+
+      - name: Apply D1 migrations
+        run: npx wrangler d1 migrations apply flowchart-db --remote
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-        run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && APP_DIR='$DEPLOY_PATH' bash scripts/deploy.sh"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Build and deploy Worker
+        run: npx opennextjs-cloudflare build && npx opennextjs-cloudflare deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

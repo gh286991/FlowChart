@@ -1,7 +1,8 @@
 {
   "status": "failure",
   "url": null,
-  "runUrl": "https://github.com/gh286991/FlowChart/actions/runs/29160723230",
-  "commit": "a1d042b72993504dc90179549823627e56c12683",
-  "updatedAt": "2026-07-11T16:57:43.803306+00:00"
+  "runUrl": "https://github.com/gh286991/FlowChart/actions/runs/29160766506",
+  "commit": "9afffe6337b22837594bcd88bda1bf7465d1da1b",
+  "updatedAt": "2026-07-11T16:59:15.106123+00:00",
+  "logTail": "\n> flowchart-mcp@1.0.0 deploy\n> wrangler deploy\n\n\n ⛅️ wrangler 4.110.0\n────────────────────\n\nCloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md\n\n✘ [ERROR] In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN environment variable for wrangler to work. Please go to https://developers.cloudflare.com/fundamentals/api/get-started/create-token/ for instructions on how to create an api token, and assign its value to CLOUDFLARE_API_TOKEN.\n\n  \n  To continue without logging in, rerun this command with `--temporary`. Wrangler will use a temporary account and print a claim URL.\n\n\n🪵  Logs were written to \"/home/runner/.config/.wrangler/logs/wrangler-2026-07-11_16-59-14_423.log\"\n"
 }

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: flowchart-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: flowchart
+      POSTGRES_USER: flowchart
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - flowchart_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowchart -d flowchart"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  flowchart_postgres_data:

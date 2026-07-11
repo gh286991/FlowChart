@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "flowchart",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-12",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".open-next/assets"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "flowchart-db",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "NEXT_PUBLIC_APP_URL": "https://flowchart.REPLACE_WITH_SUBDOMAIN.workers.dev",
+    "SESSION_COOKIE_SECURE": "true"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

@@ -1,21 +1,20 @@
 {
   "name": "flowchart",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start -p 3000",
+    "build": "next build",
     "type-check": "tsc --noEmit",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate deploy",
-    "db:push": "prisma db push",
-    "pm2:start": "pm2 startOrReload ecosystem.config.cjs --env production",
-    "deploy": "npm run db:migrate && npm run build && npm run pm2:start"
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "wrangler d1 migrations apply flowchart-db --remote && opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "db:migrate:local": "wrangler d1 migrations apply flowchart-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply flowchart-db --remote"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.0.0-beta.3",
-    "@prisma/client": "^6.16.0",
+    "@opennextjs/cloudflare": "^1.6.5",
     "@xyflow/react": "^12.8.4",
     "bcryptjs": "^3.0.2",
     "next": "^15.5.2",
@@ -24,12 +23,12 @@
     "zod": "^4.1.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260712.0",
     "@types/node": "^22.18.0",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
-    "pm2": "^6.0.8",
-    "prisma": "^6.16.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "wrangler": "^4.105.0"
   },
   "engines": {
     "node": ">=22"

@@ -5,17 +5,36 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-      - run: npm run type-check
-      - run: npm run build
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build Next.js
+        run: npm run build
         env:
-          DATABASE_URL: postgresql://flowchart:flowchart@127.0.0.1:5432/flowchart
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+      - name: Prepare Cloudflare build config
+        run: |
+          sed -i "s/REPLACE_WITH_D1_DATABASE_ID/00000000-0000-0000-0000-000000000000/g" wrangler.jsonc
+          sed -i "s/REPLACE_WITH_SUBDOMAIN/ci-placeholder/g" wrangler.jsonc
+
+      - name: Build Cloudflare Worker bundle
+        run: npx opennextjs-cloudflare build
+        env:
           NEXT_PUBLIC_APP_URL: http://localhost:3000

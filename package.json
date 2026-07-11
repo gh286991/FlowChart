@@ -1,20 +1,37 @@
 {
-  "name": "flowchart-mcp",
-  "version": "1.0.0",
+  "name": "flowchart",
+  "version": "2.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "type-check": "tsc --noEmit"
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start -p 3000",
+    "type-check": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "pm2:start": "pm2 startOrReload ecosystem.config.cjs --env production",
+    "deploy": "npm run db:migrate && npm run build && npm run pm2:start"
   },
   "dependencies": {
-    "agents": "^0.17.1",
-    "zod": "^4.4.3"
+    "@modelcontextprotocol/server": "2.0.0-beta.3",
+    "@prisma/client": "^6.16.0",
+    "@xyflow/react": "^12.8.4",
+    "bcryptjs": "^3.0.2",
+    "next": "^15.5.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260711.1",
-    "typescript": "6.0.3",
-    "wrangler": "^4.105.0"
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "pm2": "^6.0.8",
+    "prisma": "^6.16.0",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

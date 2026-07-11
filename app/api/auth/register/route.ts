@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { createSession, sessionCookieOptions } from "@/lib/auth";
@@ -27,7 +26,8 @@ export async function POST(request: Request) {
     response.cookies.set({ ...sessionCookieOptions(), value: token });
     return response;
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("UNIQUE") || message.includes("unique")) {
       return redirectWithError(request, "這個 Email 已經註冊過了");
     }
     return redirectWithError(request, "註冊失敗，請稍後再試");

@@ -14,8 +14,19 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - run: npm run type-check
+      - name: Type check
+        id: typecheck
+        continue-on-error: true
+        run: npm run type-check 2>&1 | tee typecheck.log
+      - name: Upload type-check log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-log
+          path: typecheck.log
+      - name: Fail when type-check failed
+        if: steps.typecheck.outcome == 'failure'
+        run: exit 1
       - run: npm run build
         env:
-          DATABASE_URL: postgresql://flowchart:flowchart@127.0.0.1:5432/flowchart
           NEXT_PUBLIC_APP_URL: http://localhost:3000

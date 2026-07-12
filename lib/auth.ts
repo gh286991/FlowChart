@@ -39,7 +39,7 @@ export async function getCurrentUser() {
     include: { user: true }
   });
 
-  if (!session || session.expiresAt <= new Date()) {
+  if (!session || !("user" in session) || session.expiresAt <= new Date()) {
     if (session) await db.session.delete({ where: { id: session.id } }).catch(() => undefined);
     return null;
   }

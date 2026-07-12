@@ -1,6 +1,6 @@
 # FlowChart
 
-可由瀏覽器與 MCP 共用的多人帳號心智圖服務。前端使用 Next.js App Router，資料存放於 PostgreSQL，正式環境以 PM2 cluster mode 執行。
+可由瀏覽器與 MCP 共用的多人帳號心智圖服務。前端使用 Next.js App Router，正式環境部署到 Cloudflare Workers，資料存放於 Cloudflare D1。
 
 ## 已完成
 
@@ -18,7 +18,7 @@
 
 ## 資料庫
 
-舊版資料放在 Cloudflare Durable Object 內建儲存。新版改用 PostgreSQL，資料表如下：
+資料存放於 Cloudflare D1，資料表如下：
 
 - `User`：帳號與 bcrypt 密碼雜湊
 - `Session`：網頁登入 Session，只存 SHA-256 雜湊
@@ -30,21 +30,10 @@
 ## 本機啟動
 
 ```bash
-cp .env.example .env
-export POSTGRES_PASSWORD='請換成強密碼'
-docker compose -f docker-compose.db.yml up -d
-npm install
-npm run db:migrate
-npm run dev
-```
-
-`.env` 範例：
-
-```dotenv
-DATABASE_URL="postgresql://flowchart:請換成強密碼@127.0.0.1:5432/flowchart?schema=public"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-SESSION_COOKIE_SECURE="false"
-WEB_CONCURRENCY="2"
+nvm use
+npm ci
+npm run db:migrate:local
+npm run preview
 ```
 
 ## MCP 使用方式
@@ -71,56 +60,24 @@ MCP 工具：
 
 `create_map`、`add_node` 等操作都會回傳可直接開啟的 `/maps/{id}` 網址。
 
-## PM2 部署
+## Cloudflare 部署
 
-主機需求：Node.js 22、PM2 可執行環境、PostgreSQL，以及反向代理（建議 Nginx 或 Caddy）。
+需求：Node.js 22、已登入 Wrangler（`npx wrangler whoami`），以及 `wrangler.jsonc` 中已設定的 D1 database ID。
 
-在主機專案目錄準備 `.env` 後：
+發布會先套用遠端 D1 migrations，再建置並部署 OpenNext Worker：
 
 ```bash
 bash scripts/deploy.sh
 ```
 
-PM2 設定在 `ecosystem.config.cjs`：
-
-- 預設 2 個 instance
-- cluster mode
-- 單 instance 超過 750 MB 自動重啟
-- graceful shutdown 10 秒
-
-查看狀態：
+也可以直接執行：
 
 ```bash
-npx pm2 status
-npx pm2 logs flowchart
-curl http://127.0.0.1:3000/api/health
+npm run deploy
 ```
 
-## GitHub Actions 正式部署
+驗證：
 
-Repository Secrets：
-
-- `DEPLOY_HOST`：Node 主機 IP 或網域
-- `DEPLOY_USER`：SSH 使用者
-- `DEPLOY_SSH_KEY`：私鑰內容
-- `DEPLOY_PATH`：主機上的專案路徑，例如 `/srv/flowchart`
-
-主機上的 `.env` 不會被 rsync 覆蓋。推送到 `main` 後，workflow 會上傳程式、執行 Prisma migration、build，再用 PM2 reload。
-
-## Nginx 範例
-
-```nginx
-server {
-  listen 80;
-  server_name mindmap.example.com;
-
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_buffering off;
-  }
-}
+```bash
+curl --fail https://flowchart.gh286991.workers.dev/api/health
 ```

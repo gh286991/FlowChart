@@ -12,12 +12,12 @@
     {
       "binding": "DB",
       "database_name": "flowchart-db",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "666fd3e6-8059-42c7-97ea-f1d8d7184a23",
       "migrations_dir": "migrations"
     }
   ],
   "vars": {
-    "NEXT_PUBLIC_APP_URL": "https://flowchart.REPLACE_WITH_SUBDOMAIN.workers.dev",
+    "NEXT_PUBLIC_APP_URL": "https://flowchart.gh286991.workers.dev",
     "SESSION_COOKIE_SECURE": "true"
   },
   "observability": {

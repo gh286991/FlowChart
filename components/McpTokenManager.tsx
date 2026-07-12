@@ -25,7 +25,7 @@ export default function McpTokenManager({ initialTokens }: { initialTokens: Toke
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name })
       });
-      const result = await response.json();
+      const result = await response.json() as { error?: string; token: string; record: TokenRow };
       if (!response.ok) throw new Error(result.error || "建立失敗");
       setPlainToken(result.token);
       setTokens(current => [result.record, ...current]);

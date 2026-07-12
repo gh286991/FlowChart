@@ -14,6 +14,10 @@ async function d1(): Promise<D1Database> {
   return env.DB as D1Database;
 }
 
+export async function pingDatabase() {
+  await (await d1()).prepare("SELECT 1").first();
+}
+
 function userFrom(row: Record<string, unknown>): User { return { id: String(row.id), email: String(row.email), name: row.name ? String(row.name) : null, passwordHash: String(row.password_hash), createdAt: new Date(String(row.created_at)), updatedAt: new Date(String(row.updated_at)) }; }
 function sessionFrom(row: Record<string, unknown>): Session { return { id: String(row.id), tokenHash: String(row.token_hash), expiresAt: new Date(String(row.expires_at)), createdAt: new Date(String(row.created_at)), userId: String(row.user_id) }; }
 function mapFrom(row: Record<string, unknown>): MindMap { return { id: String(row.id), title: String(row.title), data: JSON.parse(String(row.data)), createdAt: new Date(String(row.created_at)), updatedAt: new Date(String(row.updated_at)), userId: String(row.user_id) }; }
@@ -47,7 +51,7 @@ export const db = {
   },
   mcpToken: {
     async create({ data }: { data: { name: string; tokenHash: string; tokenPrefix: string; userId: string }; select?: unknown }) { const database = await d1(); const tokenId = id(); const stamp = now(); await database.prepare("INSERT INTO mcp_tokens (id,name,token_hash,token_prefix,created_at,user_id) VALUES (?,?,?,?,?,?)").bind(tokenId, data.name, data.tokenHash, data.tokenPrefix, stamp, data.userId).run(); return { id: tokenId, ...data, createdAt: new Date(stamp), lastUsedAt: null, revokedAt: null }; },
-    async findMany({ where }: { where: { userId: string }; orderBy?: unknown }) { const rows = await (await d1()).prepare("SELECT * FROM mcp_tokens WHERE user_id=? ORDER BY created_at DESC").bind(where.userId).all<Record<string, unknown>>(); return rows.results.map(tokenFrom); },
+    async findMany({ where }: { where: { userId: string }; orderBy?: unknown; select?: unknown }) { const rows = await (await d1()).prepare("SELECT * FROM mcp_tokens WHERE user_id=? ORDER BY created_at DESC").bind(where.userId).all<Record<string, unknown>>(); return rows.results.map(tokenFrom); },
     async findFirst({ where }: { where: { tokenHash: string; revokedAt?: null }; select?: unknown }) { const row = await (await d1()).prepare("SELECT * FROM mcp_tokens WHERE token_hash=? AND revoked_at IS NULL LIMIT 1").bind(where.tokenHash).first<Record<string, unknown>>(); return row ? tokenFrom(row) : null; },
     async update({ where, data }: { where: { id: string }; data: { lastUsedAt?: Date; revokedAt?: Date | null } }) { if (data.lastUsedAt) await (await d1()).prepare("UPDATE mcp_tokens SET last_used_at=? WHERE id=?").bind(data.lastUsedAt.toISOString(), where.id).run(); if (data.revokedAt !== undefined) await (await d1()).prepare("UPDATE mcp_tokens SET revoked_at=? WHERE id=?").bind(data.revokedAt?.toISOString() ?? null, where.id).run(); return true; },
     async updateMany({ where, data }: { where: { id: string; userId: string; revokedAt?: null }; data: { revokedAt: Date } }) { const result = await (await d1()).prepare("UPDATE mcp_tokens SET revoked_at=? WHERE id=? AND user_id=? AND revoked_at IS NULL").bind(data.revokedAt.toISOString(), where.id, where.userId).run(); return { count: result.meta.changes ?? 0 }; }

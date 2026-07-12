@@ -1,10 +1,6 @@
-name: Deploy to Cloudflare
+name: Manual deploy to Cloudflare
 
-on:
-  workflow_run:
-    workflows: ["Check"]
-    types: [completed]
-    branches: [main]
+on: workflow_dispatch
 
 permissions:
   contents: read
@@ -16,13 +12,12 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the exact verified commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: main
 
       - uses: actions/setup-node@v4
         with:

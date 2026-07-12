@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "flowchart",
+  "name": "flowchart-next",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-07-12",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
@@ -17,7 +17,7 @@
     }
   ],
   "vars": {
-    "NEXT_PUBLIC_APP_URL": "https://flowchart.gh286991.workers.dev",
+    "NEXT_PUBLIC_APP_URL": "https://flowchart-next.gh286991.workers.dev",
     "SESSION_COOKIE_SECURE": "true"
   },
   "observability": {

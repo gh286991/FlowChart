@@ -79,5 +79,5 @@ npm run deploy
 驗證：
 
 ```bash
-curl --fail https://flowchart.gh286991.workers.dev/api/health
+curl --fail https://flowchart-next.gh286991.workers.dev/api/health
 ```

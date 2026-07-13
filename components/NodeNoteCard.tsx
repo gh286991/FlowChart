@@ -8,11 +8,14 @@ import {
   type ClipboardEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import styles from "./NodeInteraction.module.css";
 
 const MAX_IMAGE_BYTES = 700 * 1024;
 const MAX_NOTE_CHARS = 1_800_000;
-const AI_TIMEOUT_MS = 60_000;
+const MAX_AI_CONTEXT_CHARS = 50_000;
+const AI_TIMEOUT_MS = 75_000;
+const DATA_IMAGE_PATTERN = /!\[([^\]]*)\]\((data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+)\)/g;
 
 type Props = {
   nodeText: string;
@@ -21,13 +24,16 @@ type Props = {
   isRoot?: boolean;
   branchContext: string[];
   aiOpen: boolean;
+  variant: "popover" | "sidebar";
   onToggleAi: () => void;
+  onExpand: () => void;
+  onCollapse: () => void;
   onChange: (markdown: string) => void;
   onClose: () => void;
 };
 
-type MarkdownResult = {
-  data?: { normalizedMarkdown?: string };
+type NoteAiPayload = {
+  data?: { markdown?: string };
   error?: string;
 };
 
@@ -133,6 +139,36 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
   return <div className={styles.preview}>{rendered.length ? rendered : <span>尚未撰寫筆記</span>}</div>;
 }
 
+function sanitizeNoteForAi(markdown: string): string {
+  const withoutEmbeddedImages = markdown.replace(DATA_IMAGE_PATTERN, (_, alt: string) =>
+    `![${alt || "貼上的圖片"}](embedded-image-omitted-from-ai-context)`,
+  );
+  return withoutEmbeddedImages.slice(0, MAX_AI_CONTEXT_CHARS);
+}
+
+function extractEmbeddedImages(markdown: string): string[] {
+  const matches = markdown.match(DATA_IMAGE_PATTERN) ?? [];
+  return [...new Set(matches)];
+}
+
+function preserveEmbeddedImages(generated: string, current: string): string {
+  const images = extractEmbeddedImages(current);
+  if (!images.length) return generated;
+  const missing = images.filter((image) => !generated.includes(image));
+  if (!missing.length) return generated;
+  return `${generated.trim()}\n\n## 圖片\n\n${missing.join("\n\n")}`;
+}
+
+async function readAiPayload(response: Response): Promise<NoteAiPayload> {
+  const text = await response.text();
+  if (!text) return { error: `AI request failed (${response.status})` };
+  try {
+    return JSON.parse(text) as NoteAiPayload;
+  } catch {
+    return { error: text.slice(0, 500) };
+  }
+}
+
 export default function NodeNoteCard({
   nodeText,
   note,
@@ -140,7 +176,10 @@ export default function NodeNoteCard({
   isRoot,
   branchContext,
   aiOpen,
+  variant,
   onToggleAi,
+  onExpand,
+  onCollapse,
   onChange,
   onClose,
 }: Props) {
@@ -148,10 +187,18 @@ export default function NodeNoteCard({
   const [prompt, setPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const requestSequenceRef = useRef(0);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(() => {
+    setMounted(true);
+    return () => {
+      requestSequenceRef.current += 1;
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const cardPosition = isRoot
     ? styles.noteCenter
@@ -210,47 +257,70 @@ export default function NodeNoteCard({
   }
 
   async function runAi(mode: "replace" | "append") {
+    requestSequenceRef.current += 1;
+    const requestId = requestSequenceRef.current;
     abortRef.current?.abort();
+
     const controller = new AbortController();
     abortRef.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+    let didTimeout = false;
+    const timeout = window.setTimeout(() => {
+      didTimeout = true;
+      controller.abort();
+    }, AI_TIMEOUT_MS);
+
     setAiLoading(true);
     setError("");
 
     try {
-      const context = branchContext.length ? `上層脈絡：${branchContext.join(" > ")}。` : "";
-      const instruction = [
-        context,
-        `目前節點：${nodeText}。`,
-        prompt.trim() || "請整理成清楚、可直接使用的節點註解。",
-        "請保留 Markdown 格式，內容要適合直接放進心智圖節點註解。",
-      ].filter(Boolean).join("\n");
-      const response = await fetch("/api/ai/markdown/organize", {
+      const response = await fetch("/api/ai/note/compose", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ content: note.trim() || `# ${nodeText}`, instruction, maxDepth: 4 }),
+        body: JSON.stringify({
+          nodeText,
+          branchContext,
+          content: sanitizeNoteForAi(note.trim() || `# ${nodeText}`),
+          instruction: prompt.trim() || "請整理成清楚、可直接使用的節點註解。",
+        }),
         signal: controller.signal,
       });
-      const payload = await response.json() as MarkdownResult;
-      const generated = payload.data?.normalizedMarkdown?.trim();
-      if (!response.ok || !generated) throw new Error(payload.error || "AI 沒有回傳可用的 Markdown");
-      updateNote(mode === "append" && note.trim() ? `${note.trim()}\n\n${generated}` : generated);
+      const payload = await readAiPayload(response);
+      if (requestId !== requestSequenceRef.current) return;
+
+      const generated = payload.data?.markdown?.trim();
+      if (!response.ok || !generated) {
+        if (response.status === 401) throw new Error("登入已過期，請重新登入後再試。");
+        throw new Error(payload.error || "AI 沒有回傳可用的 Markdown");
+      }
+
+      const next = mode === "append" && note.trim()
+        ? `${note.trim()}\n\n${generated}`
+        : preserveEmbeddedImages(generated, note);
+      updateNote(next);
       setTab("edit");
     } catch (reason) {
-      setError(controller.signal.aborted ? "AI 回應逾時，請縮短筆記後重試。" : reason instanceof Error ? reason.message : "AI 寫入失敗");
+      if (requestId !== requestSequenceRef.current) return;
+      if (controller.signal.aborted) {
+        setError(didTimeout ? "AI 回應逾時，請縮短內容後再試一次。" : "AI 請求已取消。");
+      } else {
+        setError(reason instanceof Error ? reason.message : "AI 寫入失敗");
+      }
     } finally {
       window.clearTimeout(timeout);
-      if (abortRef.current === controller) abortRef.current = null;
-      setAiLoading(false);
+      if (requestId === requestSequenceRef.current) {
+        abortRef.current = null;
+        setAiLoading(false);
+      }
     }
   }
 
-  return (
+  const card = (
     <section
-      className={`${styles.noteCard} ${cardPosition} nodrag nopan nowheel`}
+      className={`${styles.noteCard} ${variant === "sidebar" ? styles.noteSidebar : `${styles.notePopover} ${cardPosition}`} nodrag nopan nowheel`}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
       aria-label={`${nodeText} 的 Markdown 註解`}
+      aria-busy={aiLoading}
     >
       <header className={styles.noteHeader}>
         <strong title={nodeText}>註解 · {nodeText}</strong>
@@ -258,7 +328,14 @@ export default function NodeNoteCard({
           <button type="button" className={tab === "edit" ? styles.activeTab : ""} onClick={() => setTab("edit")}>編輯</button>
           <button type="button" className={tab === "preview" ? styles.activeTab : ""} onClick={() => setTab("preview")}>預覽</button>
         </div>
-        <button type="button" className={styles.noteClose} onClick={onClose} aria-label="收合註解">×</button>
+        <div className={styles.noteHeaderActions}>
+          {variant === "popover" ? (
+            <button type="button" className={styles.formatButton} onClick={onExpand}>展開</button>
+          ) : (
+            <button type="button" className={styles.formatButton} onClick={onCollapse}>縮小</button>
+          )}
+          <button type="button" className={styles.noteClose} onClick={onClose} aria-label="關閉註解">×</button>
+        </div>
       </header>
 
       {aiOpen && (
@@ -314,4 +391,7 @@ export default function NodeNoteCard({
       </footer>
     </section>
   );
+
+  if (variant === "sidebar") return mounted ? createPortal(card, document.body) : null;
+  return card;
 }

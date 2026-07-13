@@ -12,6 +12,22 @@ function extractResponse<T>(raw: unknown): T {
   return raw as T;
 }
 
+function extractTextResponse(raw: unknown): string {
+  if (typeof raw === "string") return raw;
+  if (!raw || typeof raw !== "object") throw new Error("Workers AI returned an empty response");
+
+  const record = raw as Record<string, unknown>;
+  if (typeof record.response === "string") return record.response;
+  if (typeof record.output_text === "string") return record.output_text;
+  if (record.result && typeof record.result === "object") {
+    const result = record.result as Record<string, unknown>;
+    if (typeof result.response === "string") return result.response;
+    if (typeof result.output_text === "string") return result.output_text;
+  }
+
+  throw new Error("Workers AI did not return text");
+}
+
 export async function generateStructured<T>(
   env: AiEnv,
   options: {
@@ -32,4 +48,22 @@ export async function generateStructured<T>(
   });
 
   return extractResponse<T>(raw);
+}
+
+export async function generateText(
+  env: AiEnv,
+  options: {
+    messages: AiMessage[];
+    maxTokens?: number;
+    temperature?: number;
+  },
+): Promise<string> {
+  const model = env.AI_MODEL?.trim() || DEFAULT_MODEL;
+  const raw = await env.AI.run(model, {
+    messages: options.messages,
+    max_tokens: options.maxTokens ?? 3_000,
+    temperature: options.temperature ?? 0.25,
+  });
+
+  return extractTextResponse(raw).trim();
 }

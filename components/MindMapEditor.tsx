@@ -17,7 +17,6 @@ import {
 } from "@xyflow/react";
 import NodeNoteCard from "@/components/NodeNoteCard";
 import styles from "@/components/NodeInteraction.module.css";
-import { layoutMindMapForExpandedNotes } from "@/lib/expanded-layout";
 import {
   addChildNode,
   autoLayoutMindMap,
@@ -32,6 +31,8 @@ export type EditorMap = {
   data: MindMapData;
 };
 
+type NoteDisplayMode = "popover" | "sidebar";
+
 type MindNodeData = {
   nodeId: string;
   text: string;
@@ -40,6 +41,7 @@ type MindNodeData = {
   side?: "left" | "right";
   note?: string;
   expanded: boolean;
+  noteMode: NoteDisplayMode;
   aiOpen: boolean;
   branchContext: string[];
   onAddSibling: (nodeId: string) => void;
@@ -47,6 +49,8 @@ type MindNodeData = {
   onRename: (nodeId: string) => void;
   onToggleNote: (nodeId: string) => void;
   onToggleAi: (nodeId: string) => void;
+  onExpandNote: (nodeId: string) => void;
+  onCollapseNote: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
   onNoteChange: (nodeId: string, markdown: string) => void;
 };
@@ -121,7 +125,10 @@ function MindNodeCard({ data, selected }: NodeProps<Node<MindNodeData>>) {
           isRoot={data.isRoot}
           branchContext={data.branchContext}
           aiOpen={data.aiOpen}
+          variant={data.noteMode}
           onToggleAi={() => data.onToggleAi(data.nodeId)}
+          onExpand={() => data.onExpandNote(data.nodeId)}
+          onCollapse={() => data.onCollapseNote(data.nodeId)}
           onChange={(markdown) => data.onNoteChange(data.nodeId, markdown)}
           onClose={() => data.onToggleNote(data.nodeId)}
         />
@@ -170,17 +177,14 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   const [mapData, setMapData] = useState<MindMapData>(initialMap.data);
   const [selectedId, setSelectedId] = useState("root");
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  const [sidebarNoteId, setSidebarNoteId] = useState<string | null>(null);
   const [aiNoteId, setAiNoteId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { fitView } = useReactFlow();
 
   const nodeTypes = useMemo(() => ({ mind: MindNodeCard }), []);
-  const selectedNode = mapData.nodes.find((node) => node.id === selectedId) ?? mapData.nodes[0];
-  const displayData = useMemo(
-    () => layoutMindMapForExpandedNotes(mapData, expandedNoteId ? [expandedNoteId] : []),
-    [mapData, expandedNoteId],
-  );
+  const selectedNode = mapData.nodes.find((node) => node.id === selectedId) ?? null;
 
   const save = useCallback(async (nextTitle: string, nextData: MindMapData) => {
     setSaveState("saving");
@@ -206,16 +210,17 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
   }, []);
 
-  useEffect(() => {
-    const timer = setTimeout(() => void fitView({ padding: 0.18, duration: 380 }), 80);
-    return () => clearTimeout(timer);
-  }, [expandedNoteId, fitView]);
-
   const updateData = useCallback((nextData: MindMapData, shouldFit = false, nextTitle = title) => {
     setMapData(nextData);
     queueSave(nextTitle, nextData);
     if (shouldFit) setTimeout(() => void fitView({ padding: 0.25, duration: 350 }), 40);
   }, [fitView, queueSave, title]);
+
+  const closeNote = useCallback(() => {
+    setExpandedNoteId(null);
+    setSidebarNoteId(null);
+    setAiNoteId(null);
+  }, []);
 
   const renameNode = useCallback((nodeId: string) => {
     const target = mapData.nodes.find((node) => node.id === nodeId);
@@ -232,10 +237,9 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     const next = addChildNode(mapData, nodeId, "新子主題");
     const added = next.nodes.at(-1);
     if (added) setSelectedId(added.id);
-    setExpandedNoteId(null);
-    setAiNoteId(null);
+    closeNote();
     updateData(next, true);
-  }, [mapData, updateData]);
+  }, [closeNote, mapData, updateData]);
 
   const addSiblingFor = useCallback((nodeId: string) => {
     const target = mapData.nodes.find((node) => node.id === nodeId);
@@ -244,28 +248,28 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     const next = addChildNode(mapData, parentId, "新主題");
     const added = next.nodes.at(-1);
     if (added) setSelectedId(added.id);
-    setExpandedNoteId(null);
-    setAiNoteId(null);
+    closeNote();
     updateData(next, true);
-  }, [mapData, updateData]);
+  }, [closeNote, mapData, updateData]);
 
   const removeNode = useCallback((nodeId: string) => {
     const target = mapData.nodes.find((node) => node.id === nodeId);
     if (!target || nodeId === "root") return;
     const next = deleteNodeTree(mapData, nodeId);
     setSelectedId(target.parentId ?? "root");
-    if (expandedNoteId === nodeId) setExpandedNoteId(null);
-    if (aiNoteId === nodeId) setAiNoteId(null);
+    if (expandedNoteId === nodeId) closeNote();
     updateData(next, true);
-  }, [aiNoteId, expandedNoteId, mapData, updateData]);
+  }, [closeNote, expandedNoteId, mapData, updateData]);
 
   const toggleNote = useCallback((nodeId: string) => {
     setSelectedId(nodeId);
     setExpandedNoteId((current) => {
       if (current === nodeId) {
+        setSidebarNoteId(null);
         setAiNoteId(null);
         return null;
       }
+      setSidebarNoteId(null);
       setAiNoteId(null);
       return nodeId;
     });
@@ -275,6 +279,18 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     setSelectedId(nodeId);
     setExpandedNoteId(nodeId);
     setAiNoteId((current) => current === nodeId ? null : nodeId);
+  }, []);
+
+  const expandNote = useCallback((nodeId: string) => {
+    setSelectedId(nodeId);
+    setExpandedNoteId(nodeId);
+    setSidebarNoteId(nodeId);
+  }, []);
+
+  const collapseNote = useCallback((nodeId: string) => {
+    setSelectedId(nodeId);
+    setExpandedNoteId(nodeId);
+    setSidebarNoteId(null);
   }, []);
 
   const updateNodeNote = useCallback((nodeId: string, markdown: string) => {
@@ -287,20 +303,21 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     updateData(next);
   }, [mapData, updateData]);
 
-  const flowNodes = useMemo<Node<MindNodeData>[]>(() => displayData.nodes.map((node) => ({
+  const flowNodes = useMemo<Node<MindNodeData>[]>(() => mapData.nodes.map((node) => ({
     id: node.id,
     type: "mind",
     position: { x: node.x, y: node.y },
-    draggable: expandedNoteId === null,
-    zIndex: node.id === expandedNoteId ? 50 : node.id === selectedId ? 30 : 1,
+    draggable: sidebarNoteId === null,
+    zIndex: node.id === expandedNoteId ? 80 : node.id === selectedId ? 30 : 1,
     data: {
       nodeId: node.id,
       text: node.text,
       color: node.color,
       isRoot: node.parentId === null,
       side: node.side,
-      note: mapData.nodes.find((item) => item.id === node.id)?.note,
+      note: node.note,
       expanded: expandedNoteId === node.id,
+      noteMode: sidebarNoteId === node.id ? "sidebar" : "popover",
       aiOpen: aiNoteId === node.id,
       branchContext: branchContext(mapData, node.id),
       onAddSibling: addSiblingFor,
@@ -308,6 +325,8 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
       onRename: renameNode,
       onToggleNote: toggleNote,
       onToggleAi: toggleAi,
+      onExpandNote: expandNote,
+      onCollapseNote: collapseNote,
       onDelete: removeNode,
       onNoteChange: updateNodeNote,
     },
@@ -315,17 +334,19 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     addChildFor,
     addSiblingFor,
     aiNoteId,
-    displayData.nodes,
+    collapseNote,
+    expandNote,
     expandedNoteId,
     mapData,
     removeNode,
     renameNode,
     selectedId,
+    sidebarNoteId,
     toggleAi,
     toggleNote,
     updateNodeNote,
   ]);
-  const flowEdges = useMemo(() => toFlowEdges(displayData), [displayData]);
+  const flowEdges = useMemo(() => toFlowEdges(mapData), [mapData]);
 
   const arrange = useCallback((layoutMode = mapData.layoutMode) => {
     const next = autoLayoutMindMap({ ...mapData, layoutMode });
@@ -338,22 +359,27 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, button, [contenteditable='true']")) return;
+      if (event.key === "Escape" && expandedNoteId) {
+        event.preventDefault();
+        closeNote();
+        return;
+      }
       if (event.key === "Tab") {
         event.preventDefault();
         addChildFor(selectedNode?.id ?? "root");
       }
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedNode?.id !== "root") {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedNode?.id && selectedNode.id !== "root") {
         event.preventDefault();
         removeNode(selectedNode.id);
       }
-      if (event.key === "Enter") {
+      if (event.key === "Enter" && selectedNode?.id) {
         event.preventDefault();
-        renameNode(selectedNode?.id ?? "root");
+        renameNode(selectedNode.id);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [addChildFor, removeNode, renameNode, selectedNode]);
+  }, [addChildFor, closeNote, expandedNoteId, removeNode, renameNode, selectedNode]);
 
   const handleTitleChange = (nextTitle: string) => {
     setTitle(nextTitle);
@@ -386,7 +412,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
         </span>
       </header>
 
-      <div className="editor-help">點選節點使用浮動工具列：同層主題、子主題、Markdown 筆記與 AI。展開筆記會自動重新排版。</div>
+      <div className="editor-help">筆記會浮在節點上方，不會改動畫布；內容較多時可展開成右側欄。Esc 可關閉筆記。</div>
 
       <main className="editor-canvas">
         <ReactFlow

@@ -1,0 +1,339 @@
+.nodeStage {
+  position: relative;
+  width: 190px;
+  overflow: visible;
+}
+
+.rootStage {
+  width: 220px;
+}
+
+.selectedStage {
+  z-index: 40;
+}
+
+.contextToolbar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 12px);
+  z-index: 80;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid #d8e0ed;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .98);
+  box-shadow: 0 12px 32px rgba(31, 42, 68, .18);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.contextButton {
+  min-width: 62px;
+  min-height: 46px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #344054;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.contextButton:hover,
+.contextButtonActive {
+  background: #eef2ff;
+  color: #3046c0;
+}
+
+.contextIcon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.moreWrap {
+  position: relative;
+}
+
+.moreMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 90;
+  min-width: 142px;
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid #d8e0ed;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(31, 42, 68, .16);
+}
+
+.moreMenu button {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  font-weight: 750;
+}
+
+.moreMenu button:hover {
+  background: #f2f5fa;
+}
+
+.dangerAction {
+  color: #c9364f;
+}
+
+.noteBadge {
+  position: absolute;
+  right: 7px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eef1ff;
+  color: #4d5fd3;
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.noteCard {
+  position: absolute;
+  top: calc(100% + 14px);
+  z-index: 70;
+  width: 390px;
+  height: 330px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cfd8e8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(31, 42, 68, .2);
+  color: #172033;
+  text-align: left;
+  font-weight: 400;
+}
+
+.noteRight {
+  left: 0;
+}
+
+.noteLeft {
+  right: 0;
+}
+
+.noteCenter {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.noteHeader {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8faff;
+}
+
+.noteHeader strong {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.noteTabs {
+  display: flex;
+  gap: 3px;
+}
+
+.noteTabs button,
+.noteClose,
+.formatButton {
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.noteTabs button:hover,
+.noteTabs .activeTab,
+.formatButton:hover {
+  border-color: #c3cdfc;
+  background: #eaf0ff;
+  color: #3046c0;
+}
+
+.noteClose {
+  font-size: 16px;
+}
+
+.editorTools {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.noteBody {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.noteTextarea {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  resize: none;
+  border: 0;
+  padding: 12px;
+  outline: none;
+  color: #172033;
+  background: #fff;
+  font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.preview {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 12px 14px 20px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.preview h1,
+.preview h2,
+.preview h3,
+.preview h4,
+.preview p,
+.preview pre,
+.preview blockquote {
+  margin: 0 0 10px;
+}
+
+.preview h1 { font-size: 20px; }
+.preview h2 { font-size: 18px; }
+.preview h3 { font-size: 16px; }
+.preview ul { margin: 0 0 10px; padding-left: 22px; }
+.preview blockquote { padding-left: 10px; border-left: 3px solid #aab7ff; color: #667085; }
+.preview pre { overflow: auto; padding: 9px; border-radius: 8px; background: #101828; color: #eef2ff; }
+.preview code { padding: 1px 4px; border-radius: 4px; background: #eef1f6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.preview pre code { padding: 0; background: transparent; }
+.preview a { color: #315efb; text-decoration: underline; }
+.preview img { display: block; max-width: 100%; max-height: 180px; margin: 8px 0; border-radius: 8px; object-fit: contain; }
+
+.noteFooter {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px;
+  border-top: 1px solid #edf0f5;
+  color: #7a8498;
+  background: #fbfcfe;
+  font-size: 10px;
+}
+
+.aiBox {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border-bottom: 1px solid #dbe3ef;
+  background: #f7f8ff;
+}
+
+.aiInputRow {
+  display: flex;
+  gap: 6px;
+}
+
+.aiInput {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid #cfd8e8;
+  border-radius: 8px;
+  padding: 8px 9px;
+  outline: none;
+  font-size: 12px;
+}
+
+.aiInput:focus {
+  border-color: #7f95ff;
+  box-shadow: 0 0 0 3px #315efb1f;
+}
+
+.aiActions {
+  display: flex;
+  gap: 6px;
+}
+
+.aiActions button {
+  min-height: 32px;
+  flex: 1;
+  border: 1px solid #aebaff;
+  border-radius: 8px;
+  background: #fff;
+  color: #3046c0;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.aiActions button:first-child {
+  border-color: #315efb;
+  background: #315efb;
+  color: #fff;
+}
+
+.aiActions button:disabled {
+  opacity: .55;
+}
+
+.inlineError {
+  color: #a8243a;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  .contextToolbar {
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    max-width: calc(100vw - 24px);
+    overflow-x: auto;
+    transform: translateX(-50%);
+  }
+
+  .noteCard {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 78px;
+    top: auto;
+    width: auto;
+    height: min(56vh, 430px);
+    transform: none;
+  }
+}

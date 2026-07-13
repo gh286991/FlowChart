@@ -1,6 +1,11 @@
 import { markdownSchema, researchSchema, taskSchema } from "./schemas";
 import { markdownMessages, researchMessages, taskMessages } from "./prompts";
 import { loadResearchSources } from "./source-loader";
+import {
+  parseMarkdownResult,
+  parseResearchResult,
+  parseTaskResult,
+} from "./result-validation";
 import type {
   AiEnv,
   OrganizeMarkdownInput,
@@ -34,7 +39,7 @@ export async function researchNode(
   const query = question || `${branchContext.join(" ")} ${nodeText}`.trim();
   const { sources, errors } = await loadResearchSources(env, query, sourceUrls);
 
-  return generateStructured<ResearchNodeResult>(env, {
+  const result = await generateStructured<unknown>(env, {
     schema: researchSchema as unknown as Record<string, unknown>,
     messages: researchMessages({
       nodeText,
@@ -45,6 +50,8 @@ export async function researchNode(
       sourceErrors: errors,
     }),
   });
+
+  return parseResearchResult(result);
 }
 
 export async function splitNodeIntoTasks(
@@ -56,10 +63,12 @@ export async function splitNodeIntoTasks(
   const constraints = normalizeStringArray(raw.constraints, "constraints", 10, 1_000);
   const maxTasks = clampInteger(raw.maxTasks, 7, 2, 12);
 
-  return generateStructured<SplitTasksResult>(env, {
+  const result = await generateStructured<unknown>(env, {
     schema: taskSchema as unknown as Record<string, unknown>,
     messages: taskMessages({ nodeText, branchContext, constraints, maxTasks }),
   });
+
+  return parseTaskResult(result);
 }
 
 export async function organizeMarkdown(
@@ -72,11 +81,13 @@ export async function organizeMarkdown(
     : undefined;
   const maxDepth = clampInteger(raw.maxDepth, 4, 2, 6);
 
-  return generateStructured<OrganizeMarkdownResult>(env, {
+  const result = await generateStructured<unknown>(env, {
     schema: markdownSchema as unknown as Record<string, unknown>,
     messages: markdownMessages({ content, instruction, maxDepth }),
     maxTokens: 6_000,
   });
+
+  return parseMarkdownResult(result);
 }
 
 export async function fileToMarkdown(env: AiEnv, file: File): Promise<string> {

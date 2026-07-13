@@ -15,8 +15,11 @@ import {
   type NodeProps,
   useReactFlow
 } from "@xyflow/react";
+import AiNodePanel from "@/components/AiNodePanel";
+import type { SuggestedNode } from "@/lib/ai/types";
 import {
   addChildNode,
+  addSuggestedNodeTree,
   autoLayoutMindMap,
   deleteNodeTree,
   type LayoutMode,
@@ -34,6 +37,7 @@ type MindNodeData = {
   color: string;
   isRoot: boolean;
   side?: "left" | "right";
+  note?: string;
 };
 
 function MindNodeCard({ data, selected }: NodeProps<Node<MindNodeData>>) {
@@ -41,10 +45,12 @@ function MindNodeCard({ data, selected }: NodeProps<Node<MindNodeData>>) {
     <div
       className={`mind-node ${data.isRoot ? "mind-node-root" : ""} ${selected ? "mind-node-selected" : ""}`}
       style={{ "--branch-color": data.color } as CSSProperties}
+      title={data.note || data.text}
     >
       <Handle id="left-target" type="target" position={Position.Left} className="mind-handle" />
       <Handle id="left-source" type="source" position={Position.Left} className="mind-handle" />
       <div className="mind-node-text">{data.text}</div>
+      {data.note && <div className="mind-node-ai-mark" aria-label="包含 AI 補充內容">AI</div>}
       <Handle id="right-target" type="target" position={Position.Right} className="mind-handle" />
       <Handle id="right-source" type="source" position={Position.Right} className="mind-handle" />
     </div>
@@ -60,7 +66,8 @@ function toFlowNodes(data: MindMapData): Node<MindNodeData>[] {
       text: node.text,
       color: node.color,
       isRoot: node.parentId === null,
-      side: node.side
+      side: node.side,
+      note: node.note
     }
   }));
 }
@@ -83,11 +90,29 @@ function toFlowEdges(data: MindMapData): Edge[] {
   });
 }
 
+function branchContext(data: MindMapData, nodeId: string): string[] {
+  const byId = new Map(data.nodes.map(node => [node.id, node]));
+  const result: string[] = [];
+  let current = byId.get(nodeId);
+  const visited = new Set<string>();
+
+  while (current?.parentId && !visited.has(current.id)) {
+    visited.add(current.id);
+    const parent = byId.get(current.parentId);
+    if (!parent) break;
+    result.unshift(parent.text);
+    current = parent;
+  }
+
+  return result;
+}
+
 function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   const [title, setTitle] = useState(initialMap.title);
   const [mapData, setMapData] = useState<MindMapData>(initialMap.data);
   const [selectedId, setSelectedId] = useState("root");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
+  const [aiOpen, setAiOpen] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { fitView } = useReactFlow();
 
@@ -95,6 +120,10 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   const flowNodes = useMemo(() => toFlowNodes(mapData), [mapData]);
   const flowEdges = useMemo(() => toFlowEdges(mapData), [mapData]);
   const selectedNode = mapData.nodes.find(node => node.id === selectedId) ?? mapData.nodes[0];
+  const selectedBranchContext = useMemo(
+    () => branchContext(mapData, selectedNode?.id ?? "root"),
+    [mapData, selectedNode?.id]
+  );
 
   const save = useCallback(async (nextTitle: string, nextData: MindMapData) => {
     setSaveState("saving");
@@ -149,6 +178,13 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     updateData(next, true);
   }, [mapData, selectedNode, updateData]);
 
+  const applyAiNodes = useCallback(async (nodes: SuggestedNode[]) => {
+    const parentId = selectedNode?.id ?? "root";
+    const next = addSuggestedNodeTree(mapData, parentId, nodes);
+    updateData(next, true);
+    setAiOpen(false);
+  }, [mapData, selectedNode, updateData]);
+
   const removeSelected = useCallback(() => {
     if (!selectedNode || selectedNode.id === "root") return;
     const parentId = selectedNode.parentId ?? "root";
@@ -167,7 +203,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+      if (target?.closest("input, textarea, button, [contenteditable='true']")) return;
       if (event.key === "Tab") {
         event.preventDefault();
         addChild();
@@ -209,6 +245,9 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
           <button className="button" onClick={addChild}>＋ 子節點</button>
           <button className="button" onClick={renameSelected}>重新命名</button>
           <button className="button button-danger" onClick={removeSelected} disabled={selectedId === "root"}>刪除</button>
+          <button className={`button ai-toolbar-button ${aiOpen ? "button-active" : ""}`} onClick={() => setAiOpen(open => !open)}>
+            ✦ Cloudflare AI
+          </button>
         </div>
         <div className="toolbar-group">
           <button className={`button ${mapData.layoutMode === "both" ? "button-active" : ""}`} onClick={() => changeLayout("both")}>雙向</button>
@@ -221,7 +260,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
         </span>
       </header>
 
-      <div className="editor-help">選取節點後：Tab 新增、Enter 改名、Delete 刪除。可拖曳節點與畫布，滾輪縮放。</div>
+      <div className="editor-help">選取節點後：Tab 新增、Enter 改名、Delete 刪除。AI 結果會先預覽，確認後才加入心智圖。</div>
 
       <main className="editor-canvas">
         <ReactFlow
@@ -254,6 +293,15 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
           <Controls showInteractive={false} />
         </ReactFlow>
       </main>
+
+      {aiOpen && selectedNode && (
+        <AiNodePanel
+          nodeText={selectedNode.text}
+          branchContext={selectedBranchContext}
+          onApplyNodes={applyAiNodes}
+          onClose={() => setAiOpen(false)}
+        />
+      )}
     </div>
   );
 }

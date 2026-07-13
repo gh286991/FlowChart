@@ -29,6 +29,11 @@ export function sessionCookieOptions(expiresAt = new Date(Date.now() + SESSION_T
   };
 }
 
+export function safeInternalPath(value: string | null | undefined, fallback = "/dashboard"): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return fallback;
+  return value;
+}
+
 export async function getCurrentUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;

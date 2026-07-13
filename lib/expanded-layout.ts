@@ -33,10 +33,10 @@ export function layoutMindMapForExpandedNotes(
   input: MindMapData,
   expandedNodeIds: Iterable<string>,
 ): MindMapData {
-  const arranged = autoLayoutMindMap(input);
   const expanded = [...expandedNodeIds];
-  if (!expanded.length) return arranged;
+  if (!expanded.length) return input;
 
+  const arranged = autoLayoutMindMap(input);
   const nodes = arranged.nodes.map((node) => ({ ...node }));
   const byId = new Map(nodes.map((node) => [node.id, node]));
 

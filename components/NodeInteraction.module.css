@@ -16,7 +16,7 @@
   position: absolute;
   left: 50%;
   bottom: calc(100% + 12px);
-  z-index: 80;
+  z-index: 100;
   display: flex;
   align-items: stretch;
   gap: 2px;
@@ -63,7 +63,7 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 90;
+  z-index: 110;
   min-width: 142px;
   display: grid;
   gap: 3px;
@@ -105,21 +105,24 @@
 }
 
 .noteCard {
-  position: absolute;
-  top: calc(100% + 14px);
-  z-index: 70;
+  z-index: 140;
   width: 390px;
-  height: 330px;
+  height: 320px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #cfd8e8;
   border-radius: 14px;
   background: #fff;
-  box-shadow: 0 18px 48px rgba(31, 42, 68, .2);
+  box-shadow: 0 18px 48px rgba(31, 42, 68, .22);
   color: #172033;
   text-align: left;
   font-weight: 400;
+}
+
+.notePopover {
+  position: absolute;
+  bottom: calc(100% + 76px);
 }
 
 .noteRight {
@@ -135,8 +138,23 @@
   transform: translateX(-50%);
 }
 
+.noteSidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 500;
+  width: min(540px, 100vw);
+  height: 100vh;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  box-shadow: -18px 0 52px rgba(31, 42, 68, .22);
+}
+
 .noteHeader {
-  min-height: 44px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -146,6 +164,7 @@
 }
 
 .noteHeader strong {
+  min-width: 0;
   overflow: hidden;
   flex: 1;
   text-overflow: ellipsis;
@@ -153,7 +172,8 @@
   font-size: 13px;
 }
 
-.noteTabs {
+.noteTabs,
+.noteHeaderActions {
   display: flex;
   gap: 3px;
 }
@@ -180,7 +200,8 @@
 }
 
 .noteClose {
-  font-size: 16px;
+  min-width: 30px;
+  font-size: 17px;
 }
 
 .editorTools {
@@ -213,6 +234,12 @@
   font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.noteSidebar .noteTextarea {
+  padding: 18px;
+  font-size: 14px;
+  line-height: 1.75;
+}
+
 .preview {
   min-height: 0;
   flex: 1;
@@ -220,6 +247,11 @@
   padding: 12px 14px 20px;
   font-size: 13px;
   line-height: 1.65;
+}
+
+.noteSidebar .preview {
+  padding: 18px 22px 30px;
+  font-size: 14px;
 }
 
 .preview h1,
@@ -242,6 +274,7 @@
 .preview pre code { padding: 0; background: transparent; }
 .preview a { color: #315efb; text-decoration: underline; }
 .preview img { display: block; max-width: 100%; max-height: 180px; margin: 8px 0; border-radius: 8px; object-fit: contain; }
+.noteSidebar .preview img { max-height: 420px; }
 
 .noteFooter {
   min-height: 30px;
@@ -262,6 +295,10 @@
   padding: 9px;
   border-bottom: 1px solid #dbe3ef;
   background: #f7f8ff;
+}
+
+.noteSidebar .aiBox {
+  padding: 12px 14px;
 }
 
 .aiInputRow {
@@ -311,6 +348,9 @@
 }
 
 .inlineError {
+  padding: 8px 10px;
+  border-top: 1px solid #f2bac4;
+  background: #fff0f2;
   color: #a8243a;
   font-size: 11px;
   line-height: 1.4;
@@ -326,14 +366,26 @@
     transform: translateX(-50%);
   }
 
-  .noteCard {
+  .notePopover {
     position: fixed;
     left: 12px;
     right: 12px;
     bottom: 78px;
-    top: auto;
     width: auto;
-    height: min(56vh, 430px);
+    height: min(52vh, 390px);
     transform: none;
+  }
+
+  .noteSidebar {
+    left: 0;
+    width: 100vw;
+  }
+
+  .noteHeader {
+    flex-wrap: wrap;
+  }
+
+  .noteHeader strong {
+    flex-basis: 100%;
   }
 }

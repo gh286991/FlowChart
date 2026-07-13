@@ -17,6 +17,7 @@ import {
 } from "@xyflow/react";
 import NodeNoteCard from "@/components/NodeNoteCard";
 import styles from "@/components/NodeInteraction.module.css";
+import mobile from "@/components/MobileEditor.module.scss";
 import { layoutMindMapForExpandedNotes } from "@/lib/expanded-layout";
 import {
   addChildNode,
@@ -171,12 +172,13 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   const [selectedId, setSelectedId] = useState("root");
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [aiNoteId, setAiNoteId] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { fitView } = useReactFlow();
 
   const nodeTypes = useMemo(() => ({ mind: MindNodeCard }), []);
-  const selectedNode = mapData.nodes.find((node) => node.id === selectedId) ?? mapData.nodes[0];
+  const selectedNode = mapData.nodes.find((node) => node.id === selectedId) ?? null;
   const displayData = useMemo(
     () => layoutMindMapForExpandedNotes(mapData, expandedNoteId ? [expandedNoteId] : []),
     [mapData, expandedNoteId],
@@ -207,8 +209,10 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => void fitView({ padding: 0.18, duration: 380 }), 80);
-    return () => clearTimeout(timer);
+    if (window.matchMedia("(min-width: 761px)").matches) {
+      const timer = setTimeout(() => void fitView({ padding: 0.18, duration: 380 }), 80);
+      return () => clearTimeout(timer);
+    }
   }, [expandedNoteId, fitView]);
 
   const updateData = useCallback((nextData: MindMapData, shouldFit = false, nextTitle = title) => {
@@ -234,6 +238,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     if (added) setSelectedId(added.id);
     setExpandedNoteId(null);
     setAiNoteId(null);
+    setMobileMenuOpen(false);
     updateData(next, true);
   }, [mapData, updateData]);
 
@@ -246,6 +251,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     if (added) setSelectedId(added.id);
     setExpandedNoteId(null);
     setAiNoteId(null);
+    setMobileMenuOpen(false);
     updateData(next, true);
   }, [mapData, updateData]);
 
@@ -256,11 +262,13 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     setSelectedId(target.parentId ?? "root");
     if (expandedNoteId === nodeId) setExpandedNoteId(null);
     if (aiNoteId === nodeId) setAiNoteId(null);
+    setMobileMenuOpen(false);
     updateData(next, true);
   }, [aiNoteId, expandedNoteId, mapData, updateData]);
 
   const toggleNote = useCallback((nodeId: string) => {
     setSelectedId(nodeId);
+    setMobileMenuOpen(false);
     setExpandedNoteId((current) => {
       if (current === nodeId) {
         setAiNoteId(null);
@@ -273,6 +281,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
 
   const toggleAi = useCallback((nodeId: string) => {
     setSelectedId(nodeId);
+    setMobileMenuOpen(false);
     setExpandedNoteId(nodeId);
     setAiNoteId((current) => current === nodeId ? null : nodeId);
   }, []);
@@ -329,6 +338,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
 
   const arrange = useCallback((layoutMode = mapData.layoutMode) => {
     const next = autoLayoutMindMap({ ...mapData, layoutMode });
+    setMobileMenuOpen(false);
     updateData(next, true);
   }, [mapData, updateData]);
 
@@ -366,35 +376,67 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   };
 
   return (
-    <div className="editor-shell">
-      <header className="editor-toolbar">
-        <Link href="/dashboard" className="button button-ghost">← 全部心智圖</Link>
+    <div className={`editor-shell ${mobile.editorShell}`}>
+      <header className={`editor-toolbar ${mobile.header}`}>
+        <Link href="/dashboard" className="button button-ghost shrink-0">
+          <span className="md:hidden">←</span>
+          <span className="hidden md:inline">← 全部心智圖</span>
+        </Link>
+
         <input
-          className="editor-title"
+          className={`editor-title ${mobile.title}`}
           value={title}
           onChange={(event) => handleTitleChange(event.target.value)}
           aria-label="心智圖名稱"
         />
-        <div className="toolbar-group">
+
+        <div className="toolbar-group hidden md:flex">
           <button className={`button ${mapData.layoutMode === "both" ? "button-active" : ""}`} onClick={() => changeLayout("both")}>雙向</button>
           <button className={`button ${mapData.layoutMode === "right" ? "button-active" : ""}`} onClick={() => changeLayout("right")}>向右</button>
           <button className={`button ${mapData.layoutMode === "left" ? "button-active" : ""}`} onClick={() => changeLayout("left")}>向左</button>
           <button className="button button-primary" onClick={() => arrange()}>自動排列</button>
         </div>
-        <span className={`save-state save-${saveState}`}>
-          {saveState === "saving" ? "儲存中…" : saveState === "error" ? "儲存失敗" : "已儲存"}
+
+        <button
+          type="button"
+          className={`button md:hidden ${mobile.headerMenuButton}`}
+          onClick={() => setMobileMenuOpen((open) => !open)}
+          aria-expanded={mobileMenuOpen}
+          aria-label="開啟排版選單"
+        >
+          ⋯
+        </button>
+
+        <span className={`save-state save-${saveState} ${mobile.saveState}`}>
+          {saveState === "saving" ? "儲存中…" : saveState === "error" ? "失敗" : "已儲存"}
         </span>
+
+        {mobileMenuOpen && (
+          <div className={mobile.layoutMenu}>
+            <strong>版面配置</strong>
+            <button className={mapData.layoutMode === "both" ? mobile.active : ""} onClick={() => changeLayout("both")}>雙向</button>
+            <button className={mapData.layoutMode === "right" ? mobile.active : ""} onClick={() => changeLayout("right")}>向右</button>
+            <button className={mapData.layoutMode === "left" ? mobile.active : ""} onClick={() => changeLayout("left")}>向左</button>
+            <button onClick={() => arrange()}>重新自動排列</button>
+          </div>
+        )}
       </header>
 
       <div className="editor-help">點選節點使用浮動工具列：同層主題、子主題、Markdown 筆記與 AI。展開筆記會自動重新排版。</div>
 
-      <main className="editor-canvas">
+      <main className={`editor-canvas ${mobile.canvas}`}>
         <ReactFlow
           nodes={flowNodes.map((node) => ({ ...node, selected: node.id === selectedId }))}
           edges={flowEdges}
           nodeTypes={nodeTypes}
-          onNodeClick={(_, node) => setSelectedId(node.id)}
-          onPaneClick={() => setSelectedId("")}
+          onNodeClick={(_, node) => {
+            setSelectedId(node.id);
+            setMobileMenuOpen(false);
+          }}
+          onPaneClick={() => {
+            setSelectedId("");
+            setMobileMenuOpen(false);
+          }}
           onNodeDoubleClick={(_, node) => {
             setSelectedId(node.id);
             renameNode(node.id);
@@ -410,18 +452,45 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
           }}
           fitView
           fitViewOptions={{ padding: 0.25 }}
-          minZoom={0.2}
-          maxZoom={2}
+          minZoom={0.18}
+          maxZoom={2.4}
           panOnDrag
           selectionOnDrag={false}
           nodesConnectable={false}
+          zoomOnPinch
+          panOnScroll={false}
           proOptions={{ hideAttribution: true }}
         >
           <Background gap={24} size={1} />
-          <MiniMap pannable zoomable nodeColor={(node) => (node.data as MindNodeData).color} />
-          <Controls showInteractive={false} />
+          <MiniMap className="hidden md:block" pannable zoomable nodeColor={(node) => (node.data as MindNodeData).color} />
+          <Controls className={mobile.controls} showInteractive={false} />
         </ReactFlow>
       </main>
+
+      {selectedNode && !expandedNoteId && (
+        <nav className={`${mobile.bottomDock} md:hidden`} aria-label={`${selectedNode.text} 的節點操作`}>
+          <button type="button" onClick={() => addSiblingFor(selectedNode.id)}>
+            <span>＋</span><small>同層</small>
+          </button>
+          <button type="button" onClick={() => addChildFor(selectedNode.id)}>
+            <span>↳</span><small>子主題</small>
+          </button>
+          <button type="button" onClick={() => toggleNote(selectedNode.id)}>
+            <span>▤</span><small>筆記</small>
+          </button>
+          <button type="button" onClick={() => toggleAi(selectedNode.id)}>
+            <span>✦</span><small>AI</small>
+          </button>
+          <button type="button" onClick={() => renameNode(selectedNode.id)}>
+            <span>✎</span><small>改名</small>
+          </button>
+          {!selectedNode.parentId ? null : (
+            <button type="button" className={mobile.danger} onClick={() => removeNode(selectedNode.id)}>
+              <span>⌫</span><small>刪除</small>
+            </button>
+          )}
+        </nav>
+      )}
     </div>
   );
 }

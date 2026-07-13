@@ -1,18 +1,19 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, safeInternalPath } from "@/lib/auth";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  if (await getCurrentUser()) redirect("/dashboard");
-  const { error } = await searchParams;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; returnTo?: string }> }) {
+  const { error, returnTo } = await searchParams;
+  if (await getCurrentUser()) redirect(safeInternalPath(returnTo));
 
   return (
     <main className="auth-shell">
       <section className="auth-card">
         <h1>登入 FlowChart</h1>
-        <p>登入後可管理自己的心智圖與 MCP Token。</p>
+        <p>登入後可管理自己的心智圖與 MCP 連線。</p>
         {error && <div className="error-box">{error}</div>}
         <form className="auth-form" action="/api/auth/login" method="post">
+          <input type="hidden" name="returnTo" value={safeInternalPath(returnTo)} />
           <div className="field">
             <label htmlFor="email">Email</label>
             <input id="email" name="email" type="email" required autoComplete="email" />

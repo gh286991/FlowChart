@@ -57,6 +57,17 @@
     display: none !important;
   }
 
+  .global-ai-trigger {
+    position: fixed;
+    right: 10px;
+    top: calc(72px + env(safe-area-inset-top));
+    z-index: 170;
+    min-height: 42px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    box-shadow: 0 10px 28px rgba(31, 42, 68, .2);
+  }
+
   .save-state {
     align-self: center;
     max-width: 64px;
@@ -200,11 +211,6 @@
   section[aria-label$="的 Markdown 註解"] [class*="editorTools"] {
     min-height: 48px;
     padding: 6px 10px;
-  }
-
-  section[aria-label$="的 Markdown 註解"] [class*="aiActions"] {
-    display: grid;
-    grid-template-columns: 1fr;
   }
 }
 

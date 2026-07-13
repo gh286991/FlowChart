@@ -1,23 +1,18 @@
 name: Capture typecheck diagnostics (temporary)
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/desktop-note-ime-ai-ux
-    paths:
-      - .github/workflows/typecheck-diagnostic-temp.yml
-  workflow_dispatch:
+      - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   capture:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: fix/desktop-note-ime-ai-ux
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -27,10 +22,7 @@ jobs:
         run: |
           npm run type-check > typecheck-diagnostic.log 2>&1 || true
           cat typecheck-diagnostic.log
-      - name: Commit diagnostic
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add typecheck-diagnostic.log
-          git commit -m "chore: capture temporary typecheck diagnostic"
-          git push origin HEAD:fix/desktop-note-ime-ai-ux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: typecheck-diagnostic
+          path: typecheck-diagnostic.log

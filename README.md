@@ -11,10 +11,34 @@
 - `/maps/[id]`：每張心智圖都有自己的 router
 - XMind 式雙向、向左、向右自動排列
 - 拖曳畫布、縮放、拖曳節點、Minimap
+- Cloudflare Workers AI：節點研究、任務拆分、Markdown／文件整理
+- AI 建議先預覽，確認後才加入目前選取的節點
 - `/settings/mcp`：管理 MCP OAuth 與固定 Token
 - `/mcp`：MCP Streamable HTTP endpoint
 - ChatGPT OAuth 2.1：Protected Resource Metadata、Authorization Server Metadata、DCR、PKCE、Refresh Token Rotation
 - 密碼、Session、MCP Token 與 OAuth Token 都不以明文儲存
+
+## Cloudflare Workers AI
+
+心智圖編輯器選取節點後，按下「Cloudflare AI」即可使用：
+
+- **找資料**：根據目前節點、上層脈絡與最多三個參考網址產生研究摘要與建議節點。
+- **拆分任務**：產生可執行任務、估算、相依關係與驗收條件。
+- **整理文件**：貼上 Markdown／文字，或上傳最大 10 MB 的文件，透過 `env.AI.toMarkdown()` 轉換後整理成心智圖大綱。
+
+AI API 都需要目前的網頁登入 Session：
+
+- `POST /api/ai/node/research`
+- `POST /api/ai/node/tasks`
+- `POST /api/ai/markdown/organize`
+
+Wrangler 使用 `AI` binding，預設模型為：
+
+```text
+@cf/meta/llama-3.1-8b-instruct-fast
+```
+
+可在 `wrangler.jsonc` 的 `AI_MODEL` 修改。研究網址會限制回應大小、重新導向次數，並阻擋明顯的 localhost／私有網路位址。詳細設計見 `docs/AI_V1_DESIGN.md`。
 
 ## 資料庫
 
@@ -39,6 +63,8 @@ npm ci
 npm run db:migrate:local
 npm run preview
 ```
+
+Workers AI 必須透過 Wrangler／OpenNext preview 使用遠端 AI binding；一般 `next dev` 不會提供 `env.AI`。
 
 ## ChatGPT MCP OAuth
 

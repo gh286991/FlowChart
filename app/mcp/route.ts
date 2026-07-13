@@ -11,32 +11,42 @@ import {
   type LayoutMode,
   type MindMapData
 } from "@/lib/mind-map";
+import { oauthDb } from "@/lib/oauth-db";
+import { appBaseUrl, hasScope, oauthResource, OAUTH_SCOPES, type OAuthScope } from "@/lib/oauth";
 import { sha256 } from "@/lib/security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
 const textResult = (value: unknown) => ({
   content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }]
 });
 
 const handler = createMcpHandler(({ authInfo }) => {
   const userId = authInfo?.clientId;
+  const scopes = authInfo?.scopes;
   if (!userId) throw new Error("MCP user context missing");
 
-  const server = new McpServer({ name: "FlowChart Mind Map", version: "2.0.0" });
+  const requireScope = (scope: OAuthScope) => {
+    if (!hasScope(scopes, scope)) throw new Error(`OAuth scope required: ${scope}`);
+  };
+
+  const server = new McpServer({ name: "FlowChart Mind Map", version: "3.0.0" });
 
   server.registerTool(
     "whoami",
     { description: "Return the authenticated FlowChart user id.", inputSchema: z.object({}) },
-    async () => textResult({ userId })
+    async () => {
+      requireScope("mcp:read");
+      return textResult({ userId, scopes });
+    }
   );
 
   server.registerTool(
     "list_maps",
     { description: "List mind maps owned by the authenticated user.", inputSchema: z.object({}) },
     async () => {
+      requireScope("mcp:read");
       const maps = await db.mindMap.findMany({
         where: { userId },
         orderBy: { updatedAt: "desc" },
@@ -47,7 +57,7 @@ const handler = createMcpHandler(({ authInfo }) => {
         title: map.title,
         nodeCount: (map.data as unknown as MindMapData).nodes.length,
         updatedAt: map.updatedAt,
-        editUrl: `${appUrl()}/maps/${map.id}`
+        editUrl: `${appBaseUrl()}/maps/${map.id}`
       })));
     }
   );
@@ -62,13 +72,14 @@ const handler = createMcpHandler(({ authInfo }) => {
       })
     },
     async ({ title, outline_markdown }) => {
+      requireScope("mcp:write");
       const data = outline_markdown?.trim()
         ? createMindMapFromOutline(title, outline_markdown)
         : createEmptyMindMap(title);
       const map = await db.mindMap.create({
         data: { userId, title, data: data as unknown as Prisma.InputJsonValue }
       });
-      return textResult({ id: map.id, title: map.title, editUrl: `${appUrl()}/maps/${map.id}` });
+      return textResult({ id: map.id, title: map.title, editUrl: `${appBaseUrl()}/maps/${map.id}` });
     }
   );
 
@@ -79,9 +90,10 @@ const handler = createMcpHandler(({ authInfo }) => {
       inputSchema: z.object({ map_id: z.string().min(1) })
     },
     async ({ map_id }) => {
+      requireScope("mcp:read");
       const map = await db.mindMap.findFirst({ where: { id: map_id, userId } });
       if (!map) throw new Error("map not found");
-      return textResult({ ...map, editUrl: `${appUrl()}/maps/${map.id}` });
+      return textResult({ ...map, editUrl: `${appBaseUrl()}/maps/${map.id}` });
     }
   );
 
@@ -96,6 +108,7 @@ const handler = createMcpHandler(({ authInfo }) => {
       })
     },
     async ({ map_id, parent_id, text }) => {
+      requireScope("mcp:write");
       const map = await db.mindMap.findFirst({ where: { id: map_id, userId } });
       if (!map) throw new Error("map not found");
       const next = addChildNode(map.data as unknown as MindMapData, parent_id, text);
@@ -104,7 +117,7 @@ const handler = createMcpHandler(({ authInfo }) => {
         where: { id: map.id },
         data: { data: next as unknown as Prisma.InputJsonValue }
       });
-      return textResult({ nodeId: added?.id, editUrl: `${appUrl()}/maps/${map.id}` });
+      return textResult({ nodeId: added?.id, editUrl: `${appBaseUrl()}/maps/${map.id}` });
     }
   );
 
@@ -119,6 +132,7 @@ const handler = createMcpHandler(({ authInfo }) => {
       })
     },
     async ({ map_id, node_id, text }) => {
+      requireScope("mcp:write");
       const map = await db.mindMap.findFirst({ where: { id: map_id, userId } });
       if (!map) throw new Error("map not found");
       const data = map.data as unknown as MindMapData;
@@ -131,7 +145,7 @@ const handler = createMcpHandler(({ authInfo }) => {
           data: next as unknown as Prisma.InputJsonValue
         }
       });
-      return textResult({ updated: true, editUrl: `${appUrl()}/maps/${map.id}` });
+      return textResult({ updated: true, editUrl: `${appBaseUrl()}/maps/${map.id}` });
     }
   );
 
@@ -142,6 +156,7 @@ const handler = createMcpHandler(({ authInfo }) => {
       inputSchema: z.object({ map_id: z.string().min(1), node_id: z.string().min(1) })
     },
     async ({ map_id, node_id }) => {
+      requireScope("mcp:write");
       if (node_id === "root") throw new Error("root node cannot be deleted");
       const map = await db.mindMap.findFirst({ where: { id: map_id, userId } });
       if (!map) throw new Error("map not found");
@@ -150,7 +165,7 @@ const handler = createMcpHandler(({ authInfo }) => {
         where: { id: map.id },
         data: { data: next as unknown as Prisma.InputJsonValue }
       });
-      return textResult({ deleted: true, editUrl: `${appUrl()}/maps/${map.id}` });
+      return textResult({ deleted: true, editUrl: `${appBaseUrl()}/maps/${map.id}` });
     }
   );
 
@@ -164,6 +179,7 @@ const handler = createMcpHandler(({ authInfo }) => {
       })
     },
     async ({ map_id, layout_mode }) => {
+      requireScope("mcp:write");
       const map = await db.mindMap.findFirst({ where: { id: map_id, userId } });
       if (!map) throw new Error("map not found");
       const data = map.data as unknown as MindMapData;
@@ -172,42 +188,48 @@ const handler = createMcpHandler(({ authInfo }) => {
         where: { id: map.id },
         data: { data: next as unknown as Prisma.InputJsonValue }
       });
-      return textResult({ arranged: true, layoutMode: next.layoutMode, editUrl: `${appUrl()}/maps/${map.id}` });
+      return textResult({ arranged: true, layoutMode: next.layoutMode, editUrl: `${appBaseUrl()}/maps/${map.id}` });
     }
   );
 
   return server;
 });
 
+function unauthorized(error?: string) {
+  const challenge = [
+    `Bearer resource_metadata="${appBaseUrl()}/.well-known/oauth-protected-resource"`,
+    `scope="${OAUTH_SCOPES.join(" ")}"`,
+    error ? `error="${error}"` : ""
+  ].filter(Boolean).join(", ");
+
+  return new Response(JSON.stringify({ error: error || "authorization_required" }), {
+    status: 401,
+    headers: {
+      "content-type": "application/json",
+      "www-authenticate": challenge,
+      "cache-control": "no-store"
+    }
+  });
+}
+
 async function authenticate(request: Request): Promise<AuthInfo | Response> {
   const authorization = request.headers.get("authorization");
-  if (!authorization?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "missing bearer token" }), {
-      status: 401,
-      headers: {
-        "content-type": "application/json",
-        "www-authenticate": "Bearer realm=\"FlowChart MCP\""
-      }
-    });
-  }
+  if (!authorization?.startsWith("Bearer ")) return unauthorized();
 
   const token = authorization.slice("Bearer ".length).trim();
+  const oauthToken = await oauthDb.findAccessToken(token, oauthResource());
+  if (oauthToken) {
+    return { token, clientId: oauthToken.userId, scopes: oauthToken.scopes };
+  }
+
   const record = await db.mcpToken.findFirst({
     where: { tokenHash: sha256(token), revokedAt: null },
     select: { id: true, userId: true }
   });
-  if (!record) {
-    return new Response(JSON.stringify({ error: "invalid or revoked token" }), {
-      status: 401,
-      headers: {
-        "content-type": "application/json",
-        "www-authenticate": "Bearer error=\"invalid_token\""
-      }
-    });
-  }
+  if (!record) return unauthorized("invalid_token");
 
   await db.mcpToken.update({ where: { id: record.id }, data: { lastUsedAt: new Date() } });
-  return { token, clientId: record.userId, scopes: ["mcp"] };
+  return { token, clientId: record.userId, scopes: [...OAUTH_SCOPES] };
 }
 
 async function handle(request: Request) {

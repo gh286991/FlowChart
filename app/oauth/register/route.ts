@@ -1,5 +1,6 @@
 import { oauthDb } from "@/lib/oauth-db";
 import { OAUTH_SCOPES } from "@/lib/oauth";
+import { ensureOAuthSchema } from "@/lib/oauth-schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,22 +55,28 @@ export async function POST(request: Request) {
     return registrationError("invalid_client_metadata", "Only authorization_code, refresh_token, and response_type=code are supported.");
   }
 
-  const client = await oauthDb.registerClient({
-    clientName: typeof body.client_name === "string" && body.client_name.trim() ? body.client_name.trim().slice(0, 120) : "ChatGPT MCP Client",
-    redirectUris: [...new Set(redirectUris)]
-  });
+  try {
+    await ensureOAuthSchema();
+    const client = await oauthDb.registerClient({
+      clientName: typeof body.client_name === "string" && body.client_name.trim() ? body.client_name.trim().slice(0, 120) : "ChatGPT MCP Client",
+      redirectUris: [...new Set(redirectUris)]
+    });
 
-  return Response.json({
-    client_id: client.clientId,
-    client_id_issued_at: Math.floor(client.createdAt.getTime() / 1000),
-    client_name: client.clientName,
-    redirect_uris: client.redirectUris,
-    token_endpoint_auth_method: "none",
-    grant_types: ["authorization_code", "refresh_token"],
-    response_types: ["code"],
-    scope: OAUTH_SCOPES.join(" ")
-  }, {
-    status: 201,
-    headers: { "cache-control": "no-store" }
-  });
+    return Response.json({
+      client_id: client.clientId,
+      client_id_issued_at: Math.floor(client.createdAt.getTime() / 1000),
+      client_name: client.clientName,
+      redirect_uris: client.redirectUris,
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      scope: OAUTH_SCOPES.join(" ")
+    }, {
+      status: 201,
+      headers: { "cache-control": "no-store" }
+    });
+  } catch (error) {
+    console.error("OAuth dynamic client registration failed", error);
+    return registrationError("temporarily_unavailable", "OAuth client registration is temporarily unavailable.", 503);
+  }
 }

@@ -48,11 +48,21 @@ export default function AiNodePanel({
   const [result, setResult] = useState<AiResult | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const requestSequenceRef = useRef(0);
+  const contextKey = useMemo(
+    () => [nodeText, ...branchContext].join("\u0000"),
+    [nodeText, branchContext],
+  );
 
   useEffect(() => () => {
     requestSequenceRef.current += 1;
     requestControllerRef.current?.abort();
   }, []);
+
+  useEffect(() => {
+    cancelActiveRequest();
+    setResult(null);
+    setError("");
+  }, [contextKey]);
 
   const canSubmit = useMemo(
     () => mode !== "markdown" || Boolean(markdown.trim() || file),

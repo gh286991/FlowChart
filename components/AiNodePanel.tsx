@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import type {
   OrganizeMarkdownResult,
   ResearchNodeResult,
@@ -11,6 +11,8 @@ import { tasksToSuggestedNodes } from "@/lib/ai/apply-plan";
 
 type Mode = "research" | "tasks" | "markdown";
 type AiResult = ResearchNodeResult | SplitTasksResult | OrganizeMarkdownResult;
+
+const AI_REQUEST_TIMEOUT_MS = 60_000;
 
 type Props = {
   nodeText: string;
@@ -44,6 +46,23 @@ export default function AiNodePanel({
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<AiResult | null>(null);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const requestSequenceRef = useRef(0);
+  const contextKey = useMemo(
+    () => [nodeText, ...branchContext].join("\u0000"),
+    [nodeText, branchContext],
+  );
+
+  useEffect(() => () => {
+    requestSequenceRef.current += 1;
+    requestControllerRef.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    cancelActiveRequest();
+    setResult(null);
+    setError("");
+  }, [contextKey]);
 
   const canSubmit = useMemo(
     () => mode !== "markdown" || Boolean(markdown.trim() || file),
@@ -58,13 +77,31 @@ export default function AiNodePanel({
     return [];
   }, [mode, result]);
 
+  function cancelActiveRequest() {
+    requestSequenceRef.current += 1;
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+    setLoading(false);
+  }
+
   function changeMode(next: Mode) {
+    cancelActiveRequest();
     setMode(next);
     setResult(null);
     setError("");
   }
 
   async function submit() {
+    cancelActiveRequest();
+    const requestId = requestSequenceRef.current;
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    let didTimeout = false;
+    const timeout = window.setTimeout(() => {
+      didTimeout = true;
+      controller.abort();
+    }, AI_REQUEST_TIMEOUT_MS);
+
     setLoading(true);
     setError("");
     setResult(null);
@@ -120,16 +157,26 @@ export default function AiNodePanel({
         };
       }
 
-      const response = await fetch(endpoint, init);
+      const response = await fetch(endpoint, { ...init, signal: controller.signal });
       const payload = await readPayload(response);
+      if (requestId !== requestSequenceRef.current) return;
       if (!response.ok || !payload.data) {
         throw new Error(payload.error || "AI request failed");
       }
       setResult(payload.data);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      if (requestId !== requestSequenceRef.current) return;
+      if (controller.signal.aborted) {
+        setError(didTimeout ? "Cloudflare AI 回應逾時，請縮短內容後再試一次。" : "AI 請求已取消。");
+      } else {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
     } finally {
-      setLoading(false);
+      window.clearTimeout(timeout);
+      if (requestId === requestSequenceRef.current) {
+        requestControllerRef.current = null;
+        setLoading(false);
+      }
     }
   }
 
@@ -152,7 +199,7 @@ export default function AiNodePanel({
   }
 
   return (
-    <aside className="ai-node-panel" aria-label="Cloudflare AI 助手">
+    <aside className="ai-node-panel" aria-label="Cloudflare AI 助手" aria-busy={loading}>
       <header className="ai-panel-header">
         <div>
           <strong>Cloudflare AI 助手</strong>

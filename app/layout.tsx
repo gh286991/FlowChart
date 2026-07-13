@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./tailwind.css";
 import "./globals.css";
 import "./mobile.scss";
+import "./node-ai-floating.scss";
 
 export const metadata: Metadata = {
   title: "FlowChart Mind Map",

@@ -1,0 +1,40 @@
+name: Inspect PR12 conflicts
+
+on:
+  push:
+    branches:
+      - feat/mobile-editor-tailwind-scss
+    paths:
+      - .github/workflows/debug-pr12-conflicts.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/mobile-editor-tailwind-scss
+          fetch-depth: 0
+      - name: Attempt merge and collect conflicts
+        shell: bash
+        run: |
+          set +e
+          git fetch origin main
+          git merge origin/main --no-commit --no-ff
+          mkdir -p conflict-output
+          git diff --name-only --diff-filter=U | tee conflict-output/conflicts.txt
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            mkdir -p "conflict-output/$(dirname "$file")"
+            cp "$file" "conflict-output/$file"
+          done < conflict-output/conflicts.txt
+          git status --short > conflict-output/status.txt
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr12-conflicts
+          path: conflict-output

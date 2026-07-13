@@ -15,9 +15,18 @@ const MAX_IMAGE_BYTES = 700 * 1024;
 const MAX_NOTE_CHARS = 1_800_000;
 const MAX_AI_CONTEXT_CHARS = 50_000;
 const AI_TIMEOUT_MS = 75_000;
+const NOTE_COMMIT_DELAY_MS = 320;
 const DATA_IMAGE_PATTERN = /!\[([^\]]*)\]\((data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+)\)/g;
 
+const NODE_AI_PROMPTS = [
+  "整理目前筆記",
+  "補充這個節點的重點",
+  "改成可執行待辦",
+  "改寫得更清楚",
+] as const;
+
 type Props = {
+  nodeId: string;
   nodeText: string;
   note: string;
   side?: "left" | "right";
@@ -35,6 +44,13 @@ type Props = {
 type NoteAiPayload = {
   data?: { markdown?: string };
   error?: string;
+};
+
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  candidate?: string;
 };
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -140,21 +156,19 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
 }
 
 function sanitizeNoteForAi(markdown: string): string {
-  const withoutEmbeddedImages = markdown.replace(DATA_IMAGE_PATTERN, (_, alt: string) =>
-    `![${alt || "貼上的圖片"}](embedded-image-omitted-from-ai-context)`,
-  );
-  return withoutEmbeddedImages.slice(0, MAX_AI_CONTEXT_CHARS);
+  return markdown
+    .replace(DATA_IMAGE_PATTERN, (_, alt: string) =>
+      `![${alt || "貼上的圖片"}](embedded-image-omitted-from-ai-context)`,
+    )
+    .slice(0, MAX_AI_CONTEXT_CHARS);
 }
 
 function extractEmbeddedImages(markdown: string): string[] {
-  const matches = markdown.match(DATA_IMAGE_PATTERN) ?? [];
-  return [...new Set(matches)];
+  return [...new Set(markdown.match(DATA_IMAGE_PATTERN) ?? [])];
 }
 
 function preserveEmbeddedImages(generated: string, current: string): string {
-  const images = extractEmbeddedImages(current);
-  if (!images.length) return generated;
-  const missing = images.filter((image) => !generated.includes(image));
+  const missing = extractEmbeddedImages(current).filter((image) => !generated.includes(image));
   if (!missing.length) return generated;
   return `${generated.trim()}\n\n## 圖片\n\n${missing.join("\n\n")}`;
 }
@@ -170,10 +184,9 @@ async function readAiPayload(response: Response): Promise<NoteAiPayload> {
 }
 
 export default function NodeNoteCard({
+  nodeId,
   nodeText,
   note,
-  side,
-  isRoot,
   branchContext,
   aiOpen,
   variant,
@@ -184,11 +197,19 @@ export default function NodeNoteCard({
   onClose,
 }: Props) {
   const [tab, setTab] = useState<"edit" | "preview">("edit");
-  const [prompt, setPrompt] = useState("");
+  const [draft, setDraft] = useState(note);
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const draftRef = useRef(note);
+  const lastSentRef = useRef(note);
+  const composingRef = useRef(false);
+  const chatComposingRef = useRef(false);
+  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const requestSequenceRef = useRef(0);
 
@@ -197,30 +218,86 @@ export default function NodeNoteCard({
     return () => {
       requestSequenceRef.current += 1;
       abortRef.current?.abort();
+      if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
     };
   }, []);
 
-  const cardPosition = isRoot
-    ? styles.noteCenter
-    : side === "left"
-      ? styles.noteLeft
-      : styles.noteRight;
+  useEffect(() => {
+    composingRef.current = false;
+    if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
+    draftRef.current = note;
+    lastSentRef.current = note;
+    setDraft(note);
+    setChatInput("");
+    setChatMessages([]);
+    setError("");
+  }, [nodeId]);
 
-  function updateNote(next: string) {
+  useEffect(() => {
+    if (composingRef.current || note === lastSentRef.current) return;
+    draftRef.current = note;
+    lastSentRef.current = note;
+    setDraft(note);
+  }, [note]);
+
+  useEffect(() => {
+    if (!aiOpen) return;
+    setTab("edit");
+    const timer = window.setTimeout(() => chatInputRef.current?.focus(), 80);
+    return () => window.clearTimeout(timer);
+  }, [aiOpen]);
+
+  function emitNote(next: string) {
+    if (next === lastSentRef.current) return;
+    lastSentRef.current = next;
+    onChange(next);
+  }
+
+  function updateDraft(next: string, immediate = false) {
     if (next.length > MAX_NOTE_CHARS) {
       setError("筆記內容過大，請刪除部分圖片或文字後再試。");
       return;
     }
+
     setError("");
-    onChange(next);
+    draftRef.current = next;
+    setDraft(next);
+    if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
+    if (composingRef.current && !immediate) return;
+
+    if (immediate) {
+      emitNote(next);
+      return;
+    }
+
+    commitTimerRef.current = setTimeout(() => {
+      commitTimerRef.current = null;
+      emitNote(draftRef.current);
+    }, NOTE_COMMIT_DELAY_MS);
+  }
+
+  function flushDraft() {
+    if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = null;
+    if (!composingRef.current) emitNote(draftRef.current);
+  }
+
+  function closeEditor() {
+    flushDraft();
+    onClose();
+  }
+
+  function changeVariant(action: () => void) {
+    flushDraft();
+    action();
   }
 
   function insertMarkdown(before: string, after = "", placeholder = "文字") {
     const textarea = textareaRef.current;
-    const start = textarea?.selectionStart ?? note.length;
-    const end = textarea?.selectionEnd ?? note.length;
-    const selected = note.slice(start, end) || placeholder;
-    updateNote(`${note.slice(0, start)}${before}${selected}${after}${note.slice(end)}`);
+    const start = textarea?.selectionStart ?? draft.length;
+    const end = textarea?.selectionEnd ?? draft.length;
+    const selected = draft.slice(start, end) || placeholder;
+    updateDraft(`${draft.slice(0, start)}${before}${selected}${after}${draft.slice(end)}`, true);
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
       textareaRef.current?.setSelectionRange(start + before.length, start + before.length + selected.length);
@@ -243,24 +320,53 @@ export default function NodeNoteCard({
 
     try {
       const textarea = textareaRef.current;
-      const start = textarea?.selectionStart ?? note.length;
-      const end = textarea?.selectionEnd ?? note.length;
+      const start = textarea?.selectionStart ?? draftRef.current.length;
+      const end = textarea?.selectionEnd ?? draftRef.current.length;
       const markdownImages = await Promise.all(images.map(async (file, index) => {
         const dataUrl = await fileToDataUrl(file);
         const name = file.name?.replace(/[\[\]()]/g, "-") || `貼上圖片-${index + 1}`;
         return `![${name}](${dataUrl})`;
       }));
-      updateNote(`${note.slice(0, start)}\n${markdownImages.join("\n\n")}\n${note.slice(end)}`);
+      const current = draftRef.current;
+      updateDraft(`${current.slice(0, start)}\n${markdownImages.join("\n\n")}\n${current.slice(end)}`, true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "圖片貼上失敗");
     }
   }
 
-  async function runAi(mode: "replace" | "append") {
+  function applyCandidate(candidate: string, mode: "replace" | "append") {
+    const current = draftRef.current;
+    const next = mode === "append" && current.trim()
+      ? `${current.trim()}\n\n${candidate.trim()}`
+      : preserveEmbeddedImages(candidate, current);
+    updateDraft(next, true);
+    setTab("edit");
+  }
+
+  function cancelAi() {
+    requestSequenceRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setAiLoading(false);
+    setError("AI 操作已取消。");
+  }
+
+  async function sendAiMessage() {
+    const userText = chatInput.trim();
+    if (!userText || aiLoading) return;
+
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: userText,
+    };
+    const conversation = [...chatMessages, userMessage];
+    setChatMessages(conversation);
+    setChatInput("");
+
     requestSequenceRef.current += 1;
     const requestId = requestSequenceRef.current;
     abortRef.current?.abort();
-
     const controller = new AbortController();
     abortRef.current = controller;
     let didTimeout = false;
@@ -271,6 +377,10 @@ export default function NodeNoteCard({
 
     setAiLoading(true);
     setError("");
+    const history = chatMessages
+      .slice(-6)
+      .map((message) => `${message.role === "user" ? "使用者" : "節點助理"}：${message.content.slice(0, 1_500)}`)
+      .join("\n");
 
     try {
       const response = await fetch("/api/ai/note/compose", {
@@ -279,8 +389,13 @@ export default function NodeNoteCard({
         body: JSON.stringify({
           nodeText,
           branchContext,
-          content: sanitizeNoteForAi(note.trim() || `# ${nodeText}`),
-          instruction: prompt.trim() || "請整理成清楚、可直接使用的節點註解。",
+          content: sanitizeNoteForAi(draftRef.current.trim() || `# ${nodeText}`),
+          instruction: [
+            "你正在節點內和使用者對話。只能修改目前節點的 Markdown 註解，不得新增、刪除、移動或改名其他節點。",
+            history ? `先前對話：\n${history}` : "",
+            `使用者最新要求：${userText}`,
+            "請輸出一份可直接套用到目前節點註解的 Markdown 成品。",
+          ].filter(Boolean).join("\n\n"),
         }),
         signal: controller.signal,
       });
@@ -293,11 +408,12 @@ export default function NodeNoteCard({
         throw new Error(payload.error || "AI 沒有回傳可用的 Markdown");
       }
 
-      const next = mode === "append" && note.trim()
-        ? `${note.trim()}\n\n${generated}`
-        : preserveEmbeddedImages(generated, note);
-      updateNote(next);
-      setTab("edit");
+      setChatMessages((current) => [...current, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "我整理了一個只影響目前節點的版本。你可以選擇追加或取代筆記。",
+        candidate: generated,
+      }]);
     } catch (reason) {
       if (requestId !== requestSequenceRef.current) return;
       if (controller.signal.aborted) {
@@ -316,7 +432,7 @@ export default function NodeNoteCard({
 
   const card = (
     <section
-      className={`${styles.noteCard} ${variant === "sidebar" ? styles.noteSidebar : `${styles.notePopover} ${cardPosition}`} nodrag nopan nowheel`}
+      className={`${styles.noteCard} ${variant === "sidebar" ? styles.noteSidebar : styles.notePopover} nodrag nopan nowheel`}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
       aria-label={`${nodeText} 的 Markdown 註解`}
@@ -330,31 +446,77 @@ export default function NodeNoteCard({
         </div>
         <div className={styles.noteHeaderActions}>
           {variant === "popover" ? (
-            <button type="button" className={styles.formatButton} onClick={onExpand}>展開</button>
+            <button type="button" className={styles.formatButton} onClick={() => changeVariant(onExpand)}>展開</button>
           ) : (
-            <button type="button" className={styles.formatButton} onClick={onCollapse}>縮小</button>
+            <button type="button" className={styles.formatButton} onClick={() => changeVariant(onCollapse)}>縮小</button>
           )}
-          <button type="button" className={styles.noteClose} onClick={onClose} aria-label="關閉註解">×</button>
+          <button type="button" className={styles.noteClose} onClick={closeEditor} aria-label="關閉註解">×</button>
         </div>
       </header>
 
       {aiOpen && (
-        <div className={styles.aiBox}>
-          <div className={styles.aiInputRow}>
-            <input
-              className={styles.aiInput}
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              placeholder="例如：幫我補成 Podcast 訪綱"
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey && !aiLoading) void runAi("replace");
-              }}
-            />
-            <button type="button" className={styles.formatButton} onClick={onToggleAi}>收合 AI</button>
+        <div className={styles.aiChat}>
+          <div className={styles.aiChatHeader}>
+            <div>
+              <strong>節點 AI 對話</strong>
+              <span>只讀「{nodeText}」與它的註解，不讀整張圖或其他節點檔案。</span>
+            </div>
+            <button type="button" className={styles.formatButton} onClick={onToggleAi}>收合</button>
           </div>
-          <div className={styles.aiActions}>
-            <button type="button" disabled={aiLoading} onClick={() => void runAi("replace")}>{aiLoading ? "處理中…" : "AI 整理並覆寫"}</button>
-            <button type="button" disabled={aiLoading} onClick={() => void runAi("append")}>AI 追加內容</button>
+
+          <div className={styles.chatMessages}>
+            {chatMessages.length === 0 && (
+              <div className={styles.chatEmpty}>直接告訴 AI 想怎麼修改這個節點，例如「幫我補一段上架前檢查清單」。</div>
+            )}
+            {chatMessages.map((message) => (
+              <div
+                key={message.id}
+                className={`${styles.chatMessage} ${message.role === "user" ? styles.chatUser : styles.chatAssistant}`}
+              >
+                <div>{message.content}</div>
+                {message.candidate && (
+                  <div className={styles.chatCandidate}>
+                    <MarkdownPreview markdown={message.candidate} />
+                    <div className={styles.chatApplyActions}>
+                      <button type="button" onClick={() => applyCandidate(message.candidate!, "append")}>追加到筆記</button>
+                      <button type="button" onClick={() => applyCandidate(message.candidate!, "replace")}>取代筆記</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+            {aiLoading && <div className={`${styles.chatMessage} ${styles.chatAssistant}`}>正在整理目前節點…</div>}
+          </div>
+
+          <div className={styles.aiQuickPrompts}>
+            {NODE_AI_PROMPTS.map((prompt) => (
+              <button key={prompt} type="button" onClick={() => setChatInput(prompt)}>{prompt}</button>
+            ))}
+          </div>
+
+          <div className={styles.aiComposer}>
+            <textarea
+              ref={chatInputRef}
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              onCompositionStart={() => { chatComposingRef.current = true; }}
+              onCompositionEnd={() => { chatComposingRef.current = false; }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && !chatComposingRef.current) {
+                  event.preventDefault();
+                  void sendAiMessage();
+                }
+              }}
+              placeholder="和 AI 說你想如何修改目前節點…"
+            />
+            <div className={styles.aiComposerActions}>
+              <span>Enter 送出 · Shift + Enter 換行</span>
+              {aiLoading ? (
+                <button type="button" className={styles.secondaryButton} onClick={cancelAi}>取消</button>
+              ) : (
+                <button type="button" className={styles.primaryButton} disabled={!chatInput.trim()} onClick={() => void sendAiMessage()}>送出</button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -366,7 +528,7 @@ export default function NodeNoteCard({
           <button type="button" className={styles.formatButton} onClick={() => insertMarkdown("- ", "", "清單項目")}>• 清單</button>
           <button type="button" className={styles.formatButton} onClick={() => insertMarkdown("`", "`", "程式碼")}>Code</button>
           <button type="button" className={styles.formatButton} onClick={() => insertMarkdown("![", "](https://)", "圖片說明")}>圖片網址</button>
-          <button type="button" className={styles.formatButton} onClick={onToggleAi}>✦ AI</button>
+          <button type="button" className={styles.formatButton} onClick={onToggleAi}>✦ 節點 AI</button>
         </div>
       )}
 
@@ -375,23 +537,28 @@ export default function NodeNoteCard({
           <textarea
             ref={textareaRef}
             className={styles.noteTextarea}
-            value={note}
-            onChange={(event) => updateNote(event.target.value)}
+            value={draft}
+            onChange={(event) => updateDraft(event.target.value)}
+            onCompositionStart={() => { composingRef.current = true; }}
+            onCompositionEnd={(event) => {
+              composingRef.current = false;
+              updateDraft(event.currentTarget.value);
+            }}
+            onBlur={flushDraft}
             onPaste={(event) => void onPaste(event)}
             placeholder="# 節點註解\n\n支援 **Markdown**，可直接貼上圖片。"
             spellCheck
           />
-        ) : <MarkdownPreview markdown={note} />}
+        ) : <MarkdownPreview markdown={draft} />}
       </div>
 
       {error && <div className={styles.inlineError}>{error}</div>}
       <footer className={styles.noteFooter}>
         <span>支援 Markdown · 可貼圖片（單張 ≤ 700 KB）</span>
-        <span>{note.length.toLocaleString()} 字元</span>
+        <span>{draft.length.toLocaleString()} 字元</span>
       </footer>
     </section>
   );
 
-  if (variant === "sidebar") return mounted ? createPortal(card, document.body) : null;
-  return card;
+  return mounted ? createPortal(card, document.body) : null;
 }

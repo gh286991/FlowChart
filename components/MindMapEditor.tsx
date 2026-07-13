@@ -15,6 +15,7 @@ import {
   type NodeProps,
   useReactFlow,
 } from "@xyflow/react";
+import MapAiPanel from "@/components/MapAiPanel";
 import NodeNoteCard from "@/components/NodeNoteCard";
 import styles from "@/components/NodeInteraction.module.css";
 import {
@@ -84,7 +85,7 @@ function MindNodeCard({ data, selected }: NodeProps<Node<MindNodeData>>) {
             className={`${styles.contextButton} ${data.aiOpen ? styles.contextButtonActive : ""}`}
             onClick={() => data.onToggleAi(data.nodeId)}
           >
-            <span className={styles.contextIcon}>✦</span><span>AI</span>
+            <span className={styles.contextIcon}>✦</span><span>節點 AI</span>
           </button>
           <div className={styles.moreWrap}>
             <button type="button" className={styles.contextButton} onClick={() => setMoreOpen((open) => !open)}>
@@ -119,6 +120,7 @@ function MindNodeCard({ data, selected }: NodeProps<Node<MindNodeData>>) {
 
       {data.expanded && (
         <NodeNoteCard
+          nodeId={data.nodeId}
           nodeText={data.text}
           note={data.note ?? ""}
           side={data.side}
@@ -179,6 +181,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [sidebarNoteId, setSidebarNoteId] = useState<string | null>(null);
   const [aiNoteId, setAiNoteId] = useState<string | null>(null);
+  const [mapAiOpen, setMapAiOpen] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { fitView } = useReactFlow();
@@ -262,6 +265,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   }, [closeNote, expandedNoteId, mapData, updateData]);
 
   const toggleNote = useCallback((nodeId: string) => {
+    setMapAiOpen(false);
     setSelectedId(nodeId);
     setExpandedNoteId((current) => {
       if (current === nodeId) {
@@ -276,6 +280,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   }, []);
 
   const toggleAi = useCallback((nodeId: string) => {
+    setMapAiOpen(false);
     setSelectedId(nodeId);
     setExpandedNoteId(nodeId);
     setAiNoteId((current) => current === nodeId ? null : nodeId);
@@ -302,6 +307,12 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     };
     updateData(next);
   }, [mapData, updateData]);
+
+  const applyWholeMap = useCallback((next: MindMapData) => {
+    const nextTitle = next.nodes.find((node) => node.id === "root")?.text || title;
+    setTitle(nextTitle);
+    updateData(next, true, nextTitle);
+  }, [title, updateData]);
 
   const flowNodes = useMemo<Node<MindNodeData>[]>(() => mapData.nodes.map((node) => ({
     id: node.id,
@@ -359,9 +370,10 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, button, [contenteditable='true']")) return;
-      if (event.key === "Escape" && expandedNoteId) {
+      if (event.key === "Escape" && (expandedNoteId || mapAiOpen)) {
         event.preventDefault();
         closeNote();
+        setMapAiOpen(false);
         return;
       }
       if (event.key === "Tab") {
@@ -379,7 +391,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [addChildFor, closeNote, expandedNoteId, removeNode, renameNode, selectedNode]);
+  }, [addChildFor, closeNote, expandedNoteId, mapAiOpen, removeNode, renameNode, selectedNode]);
 
   const handleTitleChange = (nextTitle: string) => {
     setTitle(nextTitle);
@@ -401,6 +413,16 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
           onChange={(event) => handleTitleChange(event.target.value)}
           aria-label="心智圖名稱"
         />
+        <button
+          type="button"
+          className={`button global-ai-trigger ${mapAiOpen ? "button-active" : ""}`}
+          onClick={() => {
+            closeNote();
+            setMapAiOpen((open) => !open);
+          }}
+        >
+          ✦ 整體 AI
+        </button>
         <div className="toolbar-group">
           <button className={`button ${mapData.layoutMode === "both" ? "button-active" : ""}`} onClick={() => changeLayout("both")}>雙向</button>
           <button className={`button ${mapData.layoutMode === "right" ? "button-active" : ""}`} onClick={() => changeLayout("right")}>向右</button>
@@ -412,7 +434,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
         </span>
       </header>
 
-      <div className="editor-help">筆記會浮在節點上方，不會改動畫布；內容較多時可展開成右側欄。Esc 可關閉筆記。</div>
+      <div className="editor-help">節點 AI 只處理目前節點；整體 AI 只讀節點名稱與結構，可預覽新增、移動與排序。</div>
 
       <main className="editor-canvas">
         <ReactFlow
@@ -448,6 +470,13 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
           <Controls showInteractive={false} />
         </ReactFlow>
       </main>
+
+      <MapAiPanel
+        open={mapAiOpen}
+        data={mapData}
+        onClose={() => setMapAiOpen(false)}
+        onApply={applyWholeMap}
+      />
     </div>
   );
 }

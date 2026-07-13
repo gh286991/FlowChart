@@ -22,7 +22,12 @@ export default async function McpSettingsPage() {
   });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const configExample = JSON.stringify({
+  const oauthConfigExample = JSON.stringify({
+    mcpServers: {
+      flowchart: { url: `${appUrl}/mcp` }
+    }
+  }, null, 2);
+  const tokenConfigExample = JSON.stringify({
     mcpServers: {
       flowchart: {
         url: `${appUrl}/mcp`,
@@ -38,21 +43,27 @@ export default async function McpSettingsPage() {
         <div className="page-heading">
           <div>
             <h1>MCP 設定</h1>
-            <p>Token 會將 MCP 操作綁定到目前帳號；不同使用者看不到彼此資料。</p>
+            <p>ChatGPT 使用 OAuth 登入；Codex、Claude Desktop 等 Client 仍可使用個人 Token。</p>
           </div>
         </div>
 
-        <McpTokenManager initialTokens={tokens.map(token => ({
-          ...token,
-          createdAt: token.createdAt.toISOString(),
-          lastUsedAt: token.lastUsedAt?.toISOString() ?? null,
-          revokedAt: token.revokedAt?.toISOString() ?? null
-        }))} />
+        <section className="panel">
+          <h2>ChatGPT OAuth 連線</h2>
+          <p className="muted">在 ChatGPT 新增 MCP App 時只要填入 Endpoint，系統會自動開啟 FlowChart 登入與授權頁面。</p>
+          <p className="muted">Endpoint：<span className="mono">{appUrl}/mcp</span></p>
+          <pre className="code-block">{oauthConfigExample}</pre>
+        </section>
 
         <section className="panel" style={{ marginTop: 24 }}>
-          <h2>MCP 連線資料</h2>
-          <p className="muted">Endpoint：<span className="mono">{appUrl}/mcp</span></p>
-          <pre className="code-block">{configExample}</pre>
+          <h2>固定 Token（相容舊 Client）</h2>
+          <p className="muted">Token 會將 MCP 操作綁定到目前帳號；完整 Token 只會顯示一次。</p>
+          <McpTokenManager initialTokens={tokens.map(token => ({
+            ...token,
+            createdAt: token.createdAt.toISOString(),
+            lastUsedAt: token.lastUsedAt?.toISOString() ?? null,
+            revokedAt: token.revokedAt?.toISOString() ?? null
+          }))} />
+          <pre className="code-block" style={{ marginTop: 18 }}>{tokenConfigExample}</pre>
         </section>
       </main>
     </>

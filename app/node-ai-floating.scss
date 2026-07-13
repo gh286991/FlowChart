@@ -1,0 +1,72 @@
+/*
+ * Keep node AI chat outside the note editor's layout flow.
+ * The chat remains owned by the node note component, but behaves as an
+ * independent conversation window so opening it never resizes the note body.
+ */
+
+@media (min-width: 1051px) {
+  section[aria-label$="的 Markdown 註解"] > [class*="aiChat"] {
+    position: fixed !important;
+    top: 88px !important;
+    right: 484px !important;
+    bottom: auto !important;
+    left: auto !important;
+    z-index: 680 !important;
+    width: min(420px, calc(100vw - 530px)) !important;
+    height: min(560px, calc(100vh - 120px)) !important;
+    min-height: 420px !important;
+    max-height: none !important;
+    overflow: hidden;
+    border: 1px solid #c8d3e6;
+    border-radius: 16px;
+    background: #f7f8ff;
+    box-shadow: 0 24px 72px rgba(31, 42, 68, 0.28);
+  }
+
+  section[class*="noteSidebar"][aria-label$="的 Markdown 註解"] > [class*="aiChat"] {
+    right: auto !important;
+    left: 22px !important;
+    width: min(460px, calc(100vw - 650px)) !important;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1050px) {
+  section[aria-label$="的 Markdown 註解"] > [class*="aiChat"] {
+    position: fixed !important;
+    top: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: 50% !important;
+    z-index: 680 !important;
+    width: min(460px, calc(100vw - 48px)) !important;
+    height: min(620px, calc(100vh - 48px)) !important;
+    min-height: 420px !important;
+    max-height: none !important;
+    overflow: hidden;
+    border: 1px solid #c8d3e6;
+    border-radius: 16px;
+    background: #f7f8ff;
+    box-shadow: 0 28px 90px rgba(31, 42, 68, 0.34);
+    transform: translate(-50%, -50%) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  section[aria-label$="的 Markdown 註解"] > [class*="aiChat"] {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 760 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: hidden;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #f7f8ff;
+    box-shadow: none !important;
+    transform: none !important;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

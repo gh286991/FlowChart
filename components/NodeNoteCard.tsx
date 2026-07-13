@@ -43,9 +43,7 @@ function fileToDataUrl(file: File): Promise<string> {
 function safeUrl(value: string, image = false): string | null {
   const trimmed = value.trim();
   if (image && trimmed.startsWith("data:image/")) return trimmed;
-  if (trimmed.startsWith("https://") || trimmed.startsWith("http://") || trimmed.startsWith("/")) {
-    return trimmed;
-  }
+  if (trimmed.startsWith("https://") || trimmed.startsWith("http://") || trimmed.startsWith("/")) return trimmed;
   return null;
 }
 
@@ -81,21 +79,24 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
   const rendered = useMemo(() => {
     const lines = markdown.split(/\r?\n/);
     const nodes: ReactNode[] = [];
-    let code: string[] | null = null;
+    let codeLines: string[] | null = null;
+    let codeStart = 0;
 
-    lines.forEach((line, index) => {
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
       if (line.trim().startsWith("```")) {
-        if (code) {
-          nodes.push(<pre key={`code-${index}`}><code>{code.join("\n")}</code></pre>);
-          code = null;
+        if (codeLines) {
+          nodes.push(<pre key={`code-${codeStart}`}><code>{codeLines.join("\n")}</code></pre>);
+          codeLines = null;
         } else {
-          code = [];
+          codeLines = [];
+          codeStart = index;
         }
-        return;
+        continue;
       }
-      if (code) {
-        code.push(line);
-        return;
+      if (codeLines) {
+        codeLines.push(line);
+        continue;
       }
 
       const heading = line.match(/^(#{1,4})\s+(.+)$/);
@@ -105,27 +106,27 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
         else if (heading[1].length === 2) nodes.push(<h2 key={index}>{content}</h2>);
         else if (heading[1].length === 3) nodes.push(<h3 key={index}>{content}</h3>);
         else nodes.push(<h4 key={index}>{content}</h4>);
-        return;
+        continue;
       }
 
       const bullet = line.match(/^\s*[-*+]\s+(.+)$/);
       if (bullet) {
         nodes.push(<div key={index}>• {renderInline(bullet[1], `li-${index}`)}</div>);
-        return;
+        continue;
       }
 
       const quote = line.match(/^>\s?(.*)$/);
       if (quote) {
         nodes.push(<blockquote key={index}>{renderInline(quote[1], `q-${index}`)}</blockquote>);
-        return;
+        continue;
       }
 
       nodes.push(line.trim()
         ? <p key={index}>{renderInline(line, `p-${index}`)}</p>
         : <div key={index} aria-hidden="true">&nbsp;</div>);
-    });
+    }
 
-    if (code) nodes.push(<pre key="code-final"><code>{code.join("\n")}</code></pre>);
+    if (codeLines) nodes.push(<pre key={`code-${codeStart}`}><code>{codeLines.join("\n")}</code></pre>);
     return nodes;
   }, [markdown]);
 
@@ -172,8 +173,7 @@ export default function NodeNoteCard({
     const start = textarea?.selectionStart ?? note.length;
     const end = textarea?.selectionEnd ?? note.length;
     const selected = note.slice(start, end) || placeholder;
-    const insertion = `${before}${selected}${after}`;
-    updateNote(`${note.slice(0, start)}${insertion}${note.slice(end)}`);
+    updateNote(`${note.slice(0, start)}${before}${selected}${after}${note.slice(end)}`);
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
       textareaRef.current?.setSelectionRange(start + before.length, start + before.length + selected.length);
@@ -181,7 +181,10 @@ export default function NodeNoteCard({
   }
 
   async function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
-    const images = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+    const images = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
     if (!images.length) return;
     event.preventDefault();
 
@@ -200,8 +203,7 @@ export default function NodeNoteCard({
         const name = file.name?.replace(/[\[\]()]/g, "-") || `貼上圖片-${index + 1}`;
         return `![${name}](${dataUrl})`;
       }));
-      const insertion = `\n${markdownImages.join("\n\n")}\n`;
-      updateNote(`${note.slice(0, start)}${insertion}${note.slice(end)}`);
+      updateNote(`${note.slice(0, start)}\n${markdownImages.join("\n\n")}\n${note.slice(end)}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "圖片貼上失敗");
     }
@@ -305,11 +307,11 @@ export default function NodeNoteCard({
         ) : <MarkdownPreview markdown={note} />}
       </div>
 
+      {error && <div className={styles.inlineError}>{error}</div>}
       <footer className={styles.noteFooter}>
         <span>支援 Markdown · 可貼圖片（單張 ≤ 700 KB）</span>
         <span>{note.length.toLocaleString()} 字元</span>
       </footer>
-      {error && <div className={styles.inlineError}>{error}</div>}
     </section>
   );
 }

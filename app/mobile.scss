@@ -1,0 +1,219 @@
+@media (max-width: 760px) {
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body {
+    touch-action: manipulation;
+  }
+
+  .editor-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .editor-toolbar {
+    position: relative;
+    z-index: 100;
+    min-height: 64px;
+    height: 64px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: max(8px, env(safe-area-inset-top)) 10px 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, .97);
+    backdrop-filter: blur(16px);
+  }
+
+  .editor-toolbar > .button:first-child {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .editor-toolbar > .button:first-child::before {
+    content: "←";
+    font-size: 24px;
+  }
+
+  .editor-title {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    padding: 8px 11px;
+    font-size: 16px;
+  }
+
+  .editor-toolbar .toolbar-group {
+    display: none !important;
+  }
+
+  .save-state {
+    align-self: center;
+    max-width: 64px;
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .editor-help {
+    display: none !important;
+  }
+
+  .editor-canvas {
+    height: calc(100dvh - 64px) !important;
+    min-height: 0;
+  }
+
+  .react-flow__pane {
+    touch-action: none;
+  }
+
+  .react-flow__node {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .react-flow__minimap {
+    display: none !important;
+  }
+
+  .react-flow__controls {
+    left: 10px !important;
+    bottom: calc(94px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .mind-node {
+    min-width: 172px;
+    min-height: 56px;
+    padding: 11px 13px;
+    font-size: 14px;
+  }
+
+  .mind-node-root {
+    min-width: 205px;
+    min-height: 62px;
+  }
+
+  /* Reuse the existing XMind-style node toolbar as a mobile bottom dock. */
+  [class*="contextToolbar"] {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+    z-index: 180 !important;
+    width: min(calc(100vw - 20px), 520px) !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px !important;
+    padding: 7px !important;
+    overflow: visible !important;
+    border-radius: 18px !important;
+    background: rgba(255, 255, 255, .97) !important;
+    box-shadow: 0 18px 50px rgba(31, 42, 68, .24) !important;
+    backdrop-filter: blur(18px);
+    transform: translateX(-50%) !important;
+  }
+
+  [class*="contextButton"] {
+    min-width: 0 !important;
+    min-height: 54px !important;
+    padding: 6px 4px !important;
+    border-radius: 12px !important;
+    font-size: 10px !important;
+    touch-action: manipulation;
+  }
+
+  [class*="contextIcon"] {
+    font-size: 21px !important;
+  }
+
+  [class*="moreWrap"] {
+    position: static !important;
+  }
+
+  [class*="moreMenu"] {
+    position: fixed !important;
+    left: 10px !important;
+    right: 10px !important;
+    top: auto !important;
+    bottom: calc(82px + env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+    min-width: 0 !important;
+    z-index: 190 !important;
+  }
+
+  /* Notes and AI become a full-screen phone editor. */
+  section[aria-label$="的 Markdown 註解"] {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 220 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    transform: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: #fff !important;
+  }
+
+  section[aria-label$="的 Markdown 註解"] > header {
+    min-height: 60px;
+    padding: 10px 12px;
+  }
+
+  section[aria-label$="的 Markdown 註解"] textarea {
+    min-height: 0;
+    font-size: 16px !important;
+    line-height: 1.7 !important;
+    padding: 16px !important;
+  }
+
+  section[aria-label$="的 Markdown 註解"] input {
+    min-height: 46px;
+    font-size: 16px !important;
+  }
+
+  section[aria-label$="的 Markdown 註解"] button {
+    min-height: 42px;
+    touch-action: manipulation;
+  }
+
+  section[aria-label$="的 Markdown 註解"] footer {
+    min-height: 40px;
+    padding-inline: 12px;
+  }
+
+  section[aria-label$="的 Markdown 註解"] [class*="editorTools"] {
+    min-height: 48px;
+    padding: 6px 10px;
+  }
+
+  section[aria-label$="的 Markdown 註解"] [class*="aiActions"] {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 390px) {
+  [class*="contextToolbar"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  [class*="contextToolbar"] [class*="moreWrap"] {
+    display: none !important;
+  }
+}

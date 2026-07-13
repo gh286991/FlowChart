@@ -1,0 +1,182 @@
+name: Resolve PR12 conflicts
+
+on:
+  push:
+    branches:
+      - feat/mobile-editor-tailwind-scss
+    paths:
+      - .github/workflows/resolve-pr12-conflicts.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/mobile-editor-tailwind-scss
+          fetch-depth: 0
+      - name: Merge latest main and preserve mobile editor
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          set +e
+          git merge origin/main --no-commit --no-ff
+          set -e
+
+          # Keep latest main editor logic (note sidebar + repaired AI), then layer mobile UI on top.
+          git checkout --theirs components/MindMapEditor.tsx
+          [ -f package.json ] && git checkout --ours package.json || true
+          [ -f package-lock.json ] && git checkout --ours package-lock.json || true
+
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('components/MindMapEditor.tsx')
+          text = path.read_text()
+
+          text = text.replace(
+              'import styles from "@/components/NodeInteraction.module.css";\n',
+              'import styles from "@/components/NodeInteraction.module.css";\nimport mobile from "@/components/MobileEditor.module.scss";\n',
+          )
+          text = text.replace(
+              '  const [aiNoteId, setAiNoteId] = useState<string | null>(null);\n',
+              '  const [aiNoteId, setAiNoteId] = useState<string | null>(null);\n  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);\n',
+          )
+          text = text.replace(
+              '  const closeNote = useCallback(() => {\n',
+              '  const closeNote = useCallback(() => {\n    setMobileMenuOpen(false);\n',
+          )
+          text = text.replace(
+              '  const arrange = useCallback((layoutMode = mapData.layoutMode) => {\n    const next = autoLayoutMindMap({ ...mapData, layoutMode });\n',
+              '  const arrange = useCallback((layoutMode = mapData.layoutMode) => {\n    const next = autoLayoutMindMap({ ...mapData, layoutMode });\n    setMobileMenuOpen(false);\n',
+          )
+
+          replacement = r'''  return (
+    <div className={`editor-shell ${mobile.editorShell}`}>
+      <header className={`editor-toolbar ${mobile.header}`}>
+        <Link href="/dashboard" className="button button-ghost shrink-0">
+          <span className="md:hidden">←</span>
+          <span className="hidden md:inline">← 全部心智圖</span>
+        </Link>
+
+        <input
+          className={`editor-title ${mobile.title}`}
+          value={title}
+          onChange={(event) => handleTitleChange(event.target.value)}
+          aria-label="心智圖名稱"
+        />
+
+        <div className="toolbar-group hidden md:flex">
+          <button className={`button ${mapData.layoutMode === "both" ? "button-active" : ""}`} onClick={() => changeLayout("both")}>雙向</button>
+          <button className={`button ${mapData.layoutMode === "right" ? "button-active" : ""}`} onClick={() => changeLayout("right")}>向右</button>
+          <button className={`button ${mapData.layoutMode === "left" ? "button-active" : ""}`} onClick={() => changeLayout("left")}>向左</button>
+          <button className="button button-primary" onClick={() => arrange()}>自動排列</button>
+        </div>
+
+        <button
+          type="button"
+          className={`button md:hidden ${mobile.headerMenuButton}`}
+          onClick={() => setMobileMenuOpen((open) => !open)}
+          aria-expanded={mobileMenuOpen}
+          aria-label="開啟排版選單"
+        >
+          ⋯
+        </button>
+
+        <span className={`save-state save-${saveState} ${mobile.saveState}`}>
+          {saveState === "saving" ? "儲存中…" : saveState === "error" ? "失敗" : "已儲存"}
+        </span>
+
+        {mobileMenuOpen && (
+          <div className={mobile.layoutMenu}>
+            <strong>版面配置</strong>
+            <button className={mapData.layoutMode === "both" ? mobile.active : ""} onClick={() => changeLayout("both")}>雙向</button>
+            <button className={mapData.layoutMode === "right" ? mobile.active : ""} onClick={() => changeLayout("right")}>向右</button>
+            <button className={mapData.layoutMode === "left" ? mobile.active : ""} onClick={() => changeLayout("left")}>向左</button>
+            <button onClick={() => arrange()}>重新自動排列</button>
+          </div>
+        )}
+      </header>
+
+      <div className="editor-help">筆記會浮在節點上方，不會改動畫布；內容較多時可展開成右側欄。Esc 可關閉筆記。</div>
+
+      <main className={`editor-canvas ${mobile.canvas}`}>
+        <ReactFlow
+          nodes={flowNodes.map((node) => ({ ...node, selected: node.id === selectedId }))}
+          edges={flowEdges}
+          nodeTypes={nodeTypes}
+          onNodeClick={(_, node) => {
+            setSelectedId(node.id);
+            setMobileMenuOpen(false);
+          }}
+          onPaneClick={() => {
+            setSelectedId("");
+            setMobileMenuOpen(false);
+          }}
+          onNodeDoubleClick={(_, node) => {
+            setSelectedId(node.id);
+            renameNode(node.id);
+          }}
+          onNodeDragStop={(_, dragged) => {
+            const nextData = {
+              ...mapData,
+              nodes: mapData.nodes.map((node) => node.id === dragged.id
+                ? { ...node, x: dragged.position.x, y: dragged.position.y }
+                : node),
+            };
+            updateData(nextData);
+          }}
+          fitView
+          fitViewOptions={{ padding: 0.25 }}
+          minZoom={0.18}
+          maxZoom={2.4}
+          panOnDrag
+          selectionOnDrag={false}
+          nodesConnectable={false}
+          zoomOnPinch
+          panOnScroll={false}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background gap={24} size={1} />
+          <MiniMap className="hidden md:block" pannable zoomable nodeColor={(node) => (node.data as MindNodeData).color} />
+          <Controls className={mobile.controls} showInteractive={false} />
+        </ReactFlow>
+      </main>
+
+      {selectedNode && !expandedNoteId && (
+        <nav className={`${mobile.bottomDock} md:hidden`} aria-label={`${selectedNode.text} 的節點操作`}>
+          <button type="button" onClick={() => addSiblingFor(selectedNode.id)}><span>＋</span><small>同層</small></button>
+          <button type="button" onClick={() => addChildFor(selectedNode.id)}><span>↳</span><small>子主題</small></button>
+          <button type="button" onClick={() => toggleNote(selectedNode.id)}><span>▤</span><small>筆記</small></button>
+          <button type="button" onClick={() => toggleAi(selectedNode.id)}><span>✦</span><small>AI</small></button>
+          <button type="button" onClick={() => renameNode(selectedNode.id)}><span>✎</span><small>改名</small></button>
+          {selectedNode.parentId && (
+            <button type="button" className={mobile.danger} onClick={() => removeNode(selectedNode.id)}><span>⌫</span><small>刪除</small></button>
+          )}
+        </nav>
+      )}
+    </div>
+  );
+}'''
+
+          pattern = re.compile(r'  return \(\n    <div className="editor-shell">[\s\S]*?\n  \);\n}\n\nexport default function MindMapEditor')
+          match = pattern.search(text)
+          if not match:
+              raise SystemExit('Could not locate EditorCanvas return block')
+          text = text[:match.start()] + replacement + '\n\nexport default function MindMapEditor' + text[match.end():]
+          path.write_text(text)
+          PY
+
+          git add components/MindMapEditor.tsx package.json package-lock.json app components postcss.config.mjs
+          git rm -f .github/workflows/debug-pr12-conflicts.yml .github/workflows/resolve-pr12-conflicts.yml || true
+          git add -A
+          git commit -m "merge: resolve mobile editor conflicts with main"
+          git push origin HEAD:feat/mobile-editor-tailwind-scss

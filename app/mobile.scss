@@ -1,0 +1,92 @@
+@media (max-width: 760px) {
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body {
+    touch-action: manipulation;
+  }
+
+  .editor-toolbar .button {
+    min-height: 42px;
+  }
+
+  .editor-help {
+    display: none !important;
+  }
+
+  .editor-canvas {
+    height: calc(100dvh - 64px) !important;
+  }
+
+  .react-flow__pane {
+    touch-action: none;
+  }
+
+  .react-flow__node {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .react-flow__controls {
+    left: 10px;
+    bottom: 84px;
+  }
+
+  .mind-node {
+    min-width: 172px;
+    min-height: 56px;
+    padding: 11px 13px;
+    font-size: 14px;
+  }
+
+  .mind-node-root {
+    min-width: 205px;
+    min-height: 62px;
+  }
+
+  section[aria-label$="的 Markdown 註解"] {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 200 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    transform: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: #fff;
+  }
+
+  section[aria-label$="的 Markdown 註解"] > header {
+    min-height: 58px;
+    padding: 10px 12px;
+  }
+
+  section[aria-label$="的 Markdown 註解"] textarea {
+    font-size: 16px !important;
+    line-height: 1.7 !important;
+    padding: 16px !important;
+  }
+
+  section[aria-label$="的 Markdown 註解"] input {
+    min-height: 44px;
+    font-size: 16px !important;
+  }
+
+  section[aria-label$="的 Markdown 註解"] button {
+    min-height: 40px;
+    touch-action: manipulation;
+  }
+
+  section[aria-label$="的 Markdown 註解"] footer {
+    min-height: 38px;
+    padding-inline: 12px;
+  }
+}

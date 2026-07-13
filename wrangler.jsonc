@@ -16,9 +16,14 @@
       "migrations_dir": "migrations"
     }
   ],
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
   "vars": {
     "NEXT_PUBLIC_APP_URL": "https://flowchart-next.gh286991.workers.dev",
-    "SESSION_COOKIE_SECURE": "true"
+    "SESSION_COOKIE_SECURE": "true",
+    "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast"
   },
   "observability": {
     "enabled": true

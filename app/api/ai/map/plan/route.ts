@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { readJsonRequest, runAuthenticatedAiRoute } from "@/lib/ai/http";
 import { generateStructured } from "@/lib/ai/workers-ai";
+import type { MapAiOperation } from "@/lib/map-ai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,42 +74,55 @@ const OUTPUT_JSON_SCHEMA = {
 type ParsedInput = z.infer<typeof InputSchema>;
 type RawOperation = z.infer<typeof RawOperationSchema>;
 
-function validOperations(input: ParsedInput, operations: RawOperation[]) {
+function validOperations(input: ParsedInput, operations: RawOperation[]): MapAiOperation[] {
   const ids = new Set(input.structure.nodes.map((node) => node.id));
+  const result: MapAiOperation[] = [];
 
-  return operations.flatMap((operation) => {
+  for (const operation of operations) {
     if (operation.type === "add") {
-      return operation.parentId && ids.has(operation.parentId) && operation.text
-        ? [{ type: "add" as const, parentId: operation.parentId, text: operation.text }]
-        : [];
+      if (operation.parentId && ids.has(operation.parentId) && operation.text) {
+        result.push({ type: "add", parentId: operation.parentId, text: operation.text });
+      }
+      continue;
     }
+
     if (operation.type === "rename") {
-      return operation.nodeId && ids.has(operation.nodeId) && operation.text
-        ? [{ type: "rename" as const, nodeId: operation.nodeId, text: operation.text }]
-        : [];
+      if (operation.nodeId && ids.has(operation.nodeId) && operation.text) {
+        result.push({ type: "rename", nodeId: operation.nodeId, text: operation.text });
+      }
+      continue;
     }
+
     if (operation.type === "move") {
-      return operation.nodeId
+      if (
+        operation.nodeId
         && operation.nodeId !== "root"
         && ids.has(operation.nodeId)
         && operation.parentId
         && ids.has(operation.parentId)
-        ? [{ type: "move" as const, nodeId: operation.nodeId, parentId: operation.parentId }]
-        : [];
+      ) {
+        result.push({ type: "move", nodeId: operation.nodeId, parentId: operation.parentId });
+      }
+      continue;
     }
+
     if (operation.type === "reorder") {
-      return operation.parentId && ids.has(operation.parentId) && operation.orderedNodeIds?.length
-        ? [{
-            type: "reorder" as const,
-            parentId: operation.parentId,
-            orderedNodeIds: operation.orderedNodeIds.filter((id) => ids.has(id)),
-          }]
-        : [];
+      if (operation.parentId && ids.has(operation.parentId) && operation.orderedNodeIds?.length) {
+        result.push({
+          type: "reorder",
+          parentId: operation.parentId,
+          orderedNodeIds: operation.orderedNodeIds.filter((id) => ids.has(id)),
+        });
+      }
+      continue;
     }
-    return operation.layoutMode
-      ? [{ type: "layout" as const, layoutMode: operation.layoutMode }]
-      : [];
-  });
+
+    if (operation.layoutMode) {
+      result.push({ type: "layout", layoutMode: operation.layoutMode });
+    }
+  }
+
+  return result;
 }
 
 export async function POST(request: Request) {

@@ -352,7 +352,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
         event.preventDefault();
         addChildFor(selectedNode?.id ?? "root");
       }
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedNode?.id !== "root") {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedNode && selectedNode.id !== "root") {
         event.preventDefault();
         removeNode(selectedNode.id);
       }

@@ -1,5 +1,6 @@
 export type LayoutMode = "both" | "right" | "left";
 export type BranchSide = "left" | "right";
+export type MindNodeKind = "topic" | "fact" | "question" | "risk" | "task" | "source";
 
 export type MindNode = {
   id: string;
@@ -9,6 +10,9 @@ export type MindNode = {
   y: number;
   color: string;
   side?: BranchSide;
+  note?: string;
+  kind?: MindNodeKind;
+  sourceUrls?: string[];
 };
 
 export type MindEdge = {
@@ -22,6 +26,14 @@ export type MindMapData = {
   layoutMode: LayoutMode;
   nodes: MindNode[];
   edges: MindEdge[];
+};
+
+export type SuggestedMindNode = {
+  title: string;
+  note?: string;
+  kind?: MindNodeKind;
+  sourceUrls?: string[];
+  children?: SuggestedMindNode[];
 };
 
 const ROOT_COLOR = "#26385f";
@@ -158,7 +170,12 @@ export function autoLayoutMindMap(input: MindMapData): MindMapData {
   return { ...input, nodes };
 }
 
-export function addChildNode(data: MindMapData, parentId: string, text: string): MindMapData {
+function appendChildNode(
+  data: MindMapData,
+  parentId: string,
+  text: string,
+  metadata: Pick<MindNode, "note" | "kind" | "sourceUrls"> = {},
+): { data: MindMapData; nodeId: string } {
   const parent = data.nodes.find(node => node.id === parentId);
   if (!parent) throw new Error("parent not found");
 
@@ -176,13 +193,53 @@ export function addChildNode(data: MindMapData, parentId: string, text: string):
 
   const topLevelIndex = data.nodes.filter(node => node.parentId === "root").length;
   const color = parentId === "root" ? BRANCH_COLORS[topLevelIndex % BRANCH_COLORS.length] : parent.color;
-  const id = `node-${crypto.randomUUID().slice(0, 8)}`;
+  const nodeId = `node-${crypto.randomUUID().slice(0, 8)}`;
+  const nextNode: MindNode = {
+    id: nodeId,
+    parentId,
+    text,
+    x: parent.x,
+    y: parent.y,
+    color,
+    side,
+    ...(metadata.note ? { note: metadata.note } : {}),
+    ...(metadata.kind ? { kind: metadata.kind } : {}),
+    ...(metadata.sourceUrls?.length ? { sourceUrls: metadata.sourceUrls } : {})
+  };
 
-  return autoLayoutMindMap({
-    ...data,
-    nodes: [...data.nodes, { id, parentId, text, x: parent.x, y: parent.y, color, side }],
-    edges: [...data.edges, { id: `edge-${parentId}-${id}`, source: parentId, target: id }]
-  });
+  return {
+    nodeId,
+    data: {
+      ...data,
+      nodes: [...data.nodes, nextNode],
+      edges: [...data.edges, { id: `edge-${parentId}-${nodeId}`, source: parentId, target: nodeId }]
+    }
+  };
+}
+
+export function addChildNode(data: MindMapData, parentId: string, text: string): MindMapData {
+  return autoLayoutMindMap(appendChildNode(data, parentId, text).data);
+}
+
+export function addSuggestedNodeTree(
+  data: MindMapData,
+  parentId: string,
+  suggestions: SuggestedMindNode[],
+): MindMapData {
+  let next = data;
+
+  const visit = (targetParentId: string, suggestion: SuggestedMindNode) => {
+    const appended = appendChildNode(next, targetParentId, suggestion.title, {
+      note: suggestion.note,
+      kind: suggestion.kind,
+      sourceUrls: suggestion.sourceUrls
+    });
+    next = appended.data;
+    for (const child of suggestion.children ?? []) visit(appended.nodeId, child);
+  };
+
+  for (const suggestion of suggestions) visit(parentId, suggestion);
+  return autoLayoutMindMap(next);
 }
 
 export function deleteNodeTree(data: MindMapData, nodeId: string): MindMapData {

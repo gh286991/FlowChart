@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import {
@@ -109,7 +109,7 @@ const MindNodeCard = memo(function MindNodeCard({ data, selected }: NodeProps<No
     });
   }
 
-  function openMenuFromButton(event: ReactPointerEvent<HTMLButtonElement>) {
+  function openMenuFromButton(event: ReactMouseEvent<HTMLButtonElement>) {
     event.preventDefault();
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
@@ -238,7 +238,10 @@ const MindNodeCard = memo(function MindNodeCard({ data, selected }: NodeProps<No
           <button
             type="button"
             className={`${styles.nodeMoreTrigger} nodrag nopan`}
-            onPointerDown={openMenuFromButton}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={openMenuFromButton}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(menuAnchor)}
             aria-label={`開啟 ${data.text} 的節點操作`}
             title="更多節點操作"
           >

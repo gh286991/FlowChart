@@ -247,7 +247,7 @@ export default function NodeNoteCard({
   }, []);
 
   useEffect(() => {
-    if (!floatingPosition || !canDragNote || variant !== "popover") return;
+    if (!canDragNote || variant !== "popover") return;
     const clampToViewport = () => {
       const card = cardRef.current;
       if (!card) return;
@@ -259,7 +259,7 @@ export default function NodeNoteCard({
     };
     window.addEventListener("resize", clampToViewport);
     return () => window.removeEventListener("resize", clampToViewport);
-  }, [canDragNote, floatingPosition, variant]);
+  }, [canDragNote, variant]);
 
   useEffect(() => {
     composingRef.current = false;

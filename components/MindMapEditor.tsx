@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import {
   Background,
   Controls,
@@ -46,6 +47,7 @@ type MindNodeData = {
   noteMode: NoteDisplayMode;
   aiOpen: boolean;
   branchContext: string[];
+  onSelect: (nodeId: string) => void;
   onAddSibling: (nodeId: string) => void;
   onAddChild: (nodeId: string) => void;
   onRename: (nodeId: string) => void;
@@ -57,59 +59,158 @@ type MindNodeData = {
   onNoteChange: (nodeId: string, markdown: string) => void;
 };
 
+type NodeMenuAnchor = {
+  x: number;
+  y: number;
+};
+
 const MindNodeCard = memo(function MindNodeCard({ data, selected }: NodeProps<Node<MindNodeData>>) {
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<NodeMenuAnchor | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const longPressRef = useRef<{
+    timer: ReturnType<typeof setTimeout>;
+    x: number;
+    y: number;
+    pointerId: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!selected) setMenuAnchor(null);
+  }, [selected]);
+
+  useEffect(() => {
+    if (!menuAnchor) return;
+    const closeFromOutside = (event: PointerEvent) => {
+      if (menuRef.current?.contains(event.target as HTMLElement)) return;
+      setMenuAnchor(null);
+    };
+    const closeFromEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuAnchor(null);
+    };
+    window.addEventListener("pointerdown", closeFromOutside);
+    window.addEventListener("keydown", closeFromEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeFromOutside);
+      window.removeEventListener("keydown", closeFromEscape);
+    };
+  }, [menuAnchor]);
+
+  useEffect(() => () => {
+    if (longPressRef.current) clearTimeout(longPressRef.current.timer);
+  }, []);
+
+  function openMenuAt(x: number, y: number) {
+    data.onSelect(data.nodeId);
+    const menuWidth = 236;
+    const menuHeight = 356;
+    setMenuAnchor({
+      x: Math.max(12, Math.min(x, window.innerWidth - menuWidth - 12)),
+      y: Math.max(12, Math.min(y, window.innerHeight - menuHeight - 12)),
+    });
+  }
+
+  function openMenuFromButton(event: ReactMouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = data.side === "left" ? rect.left - 228 : rect.right + 8;
+    openMenuAt(x, rect.top);
+  }
+
+  function clearLongPress() {
+    if (!longPressRef.current) return;
+    clearTimeout(longPressRef.current.timer);
+    longPressRef.current = null;
+  }
+
+  function startLongPress(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType === "mouse" || event.button !== 0) return;
+    clearLongPress();
+    const x = event.clientX;
+    const y = event.clientY;
+    const pointerId = event.pointerId;
+    const timer = setTimeout(() => {
+      openMenuAt(x, y);
+      longPressRef.current = null;
+    }, 520);
+    longPressRef.current = { timer, x, y, pointerId };
+  }
+
+  function moveLongPress(event: ReactPointerEvent<HTMLDivElement>) {
+    const pending = longPressRef.current;
+    if (!pending || pending.pointerId !== event.pointerId) return;
+    if (Math.abs(event.clientX - pending.x) > 10 || Math.abs(event.clientY - pending.y) > 10) {
+      clearLongPress();
+    }
+  }
+
+  function runMenuAction(action: () => void) {
+    setMenuAnchor(null);
+    action();
+  }
+
+  const menu = menuAnchor && typeof document !== "undefined" ? createPortal(
+    <>
+      <button
+        type="button"
+        className={styles.nodeMenuBackdrop}
+        aria-label="關閉節點選單"
+        onClick={() => setMenuAnchor(null)}
+      />
+      <div
+        ref={menuRef}
+        className={`${styles.nodeMenu} nodrag nopan nowheel`}
+        style={{ left: menuAnchor.x, top: menuAnchor.y }}
+        role="menu"
+        aria-label={`${data.text} 的節點操作`}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <div className={styles.nodeMenuHeader}>
+          <span>節點操作</span>
+          <strong title={data.text}>{data.text}</strong>
+        </div>
+        <div className={styles.nodeMenuGrid}>
+          <button type="button" role="menuitem" onClick={() => runMenuAction(() => data.onAddSibling(data.nodeId))}>
+            <span>＋</span><strong>同層主題</strong><small>新增在相同層級</small>
+          </button>
+          <button type="button" role="menuitem" onClick={() => runMenuAction(() => data.onAddChild(data.nodeId))}>
+            <span>↳</span><strong>子主題</strong><small>建立下一層節點</small>
+          </button>
+          <button type="button" role="menuitem" onClick={() => runMenuAction(() => data.onToggleNote(data.nodeId))}>
+            <span>▤</span><strong>筆記</strong><small>Markdown 與圖片</small>
+          </button>
+          <button type="button" role="menuitem" onClick={() => runMenuAction(() => data.onToggleAi(data.nodeId))}>
+            <span>✦</span><strong>節點 AI</strong><small>只修改目前節點</small>
+          </button>
+        </div>
+        <div className={styles.nodeMenuSecondary}>
+          <button type="button" role="menuitem" onClick={() => runMenuAction(() => data.onRename(data.nodeId))}>重新命名</button>
+          {!data.isRoot && (
+            <button type="button" role="menuitem" className={styles.nodeMenuDanger} onClick={() => runMenuAction(() => data.onDelete(data.nodeId))}>
+              刪除節點
+            </button>
+          )}
+        </div>
+      </div>
+    </>,
+    document.body,
+  ) : null;
 
   return (
     <div className={`${styles.nodeStage} ${data.isRoot ? styles.rootStage : ""} ${selected ? styles.selectedStage : ""}`}>
-      {selected && (
-        <div
-          className={`${styles.contextToolbar} nodrag nopan nowheel`}
-          onClick={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <button type="button" className={styles.contextButton} onClick={() => data.onAddSibling(data.nodeId)}>
-            <span className={styles.contextIcon}>＋</span><span>同層主題</span>
-          </button>
-          <button type="button" className={styles.contextButton} onClick={() => data.onAddChild(data.nodeId)}>
-            <span className={styles.contextIcon}>↳</span><span>子主題</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.contextButton} ${data.expanded ? styles.contextButtonActive : ""}`}
-            onClick={() => data.onToggleNote(data.nodeId)}
-          >
-            <span className={styles.contextIcon}>▤</span><span>筆記</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.contextButton} ${data.aiOpen ? styles.contextButtonActive : ""}`}
-            onClick={() => data.onToggleAi(data.nodeId)}
-          >
-            <span className={styles.contextIcon}>✦</span><span>節點 AI</span>
-          </button>
-          <div className={styles.moreWrap}>
-            <button type="button" className={styles.contextButton} onClick={() => setMoreOpen((open) => !open)}>
-              <span className={styles.contextIcon}>⋯</span><span>更多</span>
-            </button>
-            {moreOpen && (
-              <div className={styles.moreMenu}>
-                <button type="button" onClick={() => { setMoreOpen(false); data.onRename(data.nodeId); }}>重新命名</button>
-                {!data.isRoot && (
-                  <button type="button" className={styles.dangerAction} onClick={() => { setMoreOpen(false); data.onDelete(data.nodeId); }}>
-                    刪除節點
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       <div
         className={`mind-node ${data.isRoot ? "mind-node-root" : ""} ${selected ? "mind-node-selected" : ""}`}
         style={{ "--branch-color": data.color } as CSSProperties}
         title={data.note || data.text}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openMenuAt(event.clientX, event.clientY);
+        }}
+        onPointerDown={startLongPress}
+        onPointerMove={moveLongPress}
+        onPointerUp={clearLongPress}
+        onPointerCancel={clearLongPress}
       >
         <Handle id="left-target" type="target" position={Position.Left} className="mind-handle" />
         <Handle id="left-source" type="source" position={Position.Left} className="mind-handle" />
@@ -118,6 +219,36 @@ const MindNodeCard = memo(function MindNodeCard({ data, selected }: NodeProps<No
         <Handle id="right-target" type="target" position={Position.Right} className="mind-handle" />
         <Handle id="right-source" type="source" position={Position.Right} className="mind-handle" />
       </div>
+
+      {selected && (
+        <>
+          <button
+            type="button"
+            className={`${styles.nodeQuickAdd} ${data.side === "left" ? styles.nodeQuickAddLeft : styles.nodeQuickAddRight} nodrag nopan`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              data.onAddChild(data.nodeId);
+            }}
+            aria-label={`在 ${data.text} 下新增子主題`}
+            title="新增子主題"
+          >
+            ＋
+          </button>
+          <button
+            type="button"
+            className={`${styles.nodeMoreTrigger} nodrag nopan`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={openMenuFromButton}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(menuAnchor)}
+            aria-label={`開啟 ${data.text} 的節點操作`}
+            title="更多節點操作"
+          >
+            ⋯
+          </button>
+        </>
+      )}
 
       {data.expanded && (
         <NodeNoteCard
@@ -136,6 +267,7 @@ const MindNodeCard = memo(function MindNodeCard({ data, selected }: NodeProps<No
           onClose={() => data.onToggleNote(data.nodeId)}
         />
       )}
+      {menu}
     </div>
   );
 });
@@ -334,6 +466,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
       noteMode: sidebarNoteId === node.id ? "sidebar" : "popover",
       aiOpen: aiNoteId === node.id,
       branchContext: branchContext(mapData, node.id),
+      onSelect: setSelectedId,
       onAddSibling: addSiblingFor,
       onAddChild: addChildFor,
       onRename: renameNode,

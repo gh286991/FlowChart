@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ClipboardEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -51,6 +52,11 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   candidate?: string;
+};
+
+type FloatingPoint = {
+  x: number;
+  y: number;
 };
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -203,6 +209,16 @@ export default function NodeNoteCard({
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [canDragNote, setCanDragNote] = useState(false);
+  const [floatingPosition, setFloatingPosition] = useState<FloatingPoint | null>(null);
+  const cardRef = useRef<HTMLElement | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
   const draftRef = useRef(note);
@@ -223,11 +239,35 @@ export default function NodeNoteCard({
   }, []);
 
   useEffect(() => {
+    const media = window.matchMedia("(min-width: 761px)");
+    const update = () => setCanDragNote(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!canDragNote || variant !== "popover") return;
+    const clampToViewport = () => {
+      const card = cardRef.current;
+      if (!card) return;
+      const rect = card.getBoundingClientRect();
+      setFloatingPosition((current) => current ? {
+        x: Math.max(8, Math.min(current.x, window.innerWidth - rect.width - 8)),
+        y: Math.max(70, Math.min(current.y, window.innerHeight - rect.height - 8)),
+      } : current);
+    };
+    window.addEventListener("resize", clampToViewport);
+    return () => window.removeEventListener("resize", clampToViewport);
+  }, [canDragNote, variant]);
+
+  useEffect(() => {
     composingRef.current = false;
     if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
     draftRef.current = note;
     lastSentRef.current = note;
     setDraft(note);
+    setFloatingPosition(null);
     setChatInput("");
     setChatMessages([]);
     setError("");
@@ -430,16 +470,67 @@ export default function NodeNoteCard({
     }
   }
 
+
+  function startNoteDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!canDragNote || variant !== "popover" || event.button !== 0) return;
+    const card = cardRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: rect.left,
+      originY: rect.top,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveNoteDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    const card = cardRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !card) return;
+    const rect = card.getBoundingClientRect();
+    const nextX = drag.originX + event.clientX - drag.startX;
+    const nextY = drag.originY + event.clientY - drag.startY;
+    setFloatingPosition({
+      x: Math.max(8, Math.min(nextX, window.innerWidth - rect.width - 8)),
+      y: Math.max(70, Math.min(nextY, window.innerHeight - rect.height - 8)),
+    });
+  }
+
+  function endNoteDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
   const card = (
     <section
+      ref={cardRef}
       className={`${styles.noteCard} ${variant === "sidebar" ? styles.noteSidebar : styles.notePopover} nodrag nopan nowheel`}
+      style={canDragNote && variant === "popover" && floatingPosition ? { left: floatingPosition.x, top: floatingPosition.y, right: "auto", bottom: "auto" } : undefined}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
       aria-label={`${nodeText} 的 Markdown 註解`}
       aria-busy={aiLoading}
     >
       <header className={styles.noteHeader}>
-        <strong title={nodeText}>註解 · {nodeText}</strong>
+        <div
+          className={styles.noteDragHandle}
+          onPointerDown={startNoteDrag}
+          onPointerMove={moveNoteDrag}
+          onPointerUp={endNoteDrag}
+          onPointerCancel={endNoteDrag}
+          title={canDragNote && variant === "popover" ? "拖曳移動筆記視窗" : undefined}
+        >
+          <span className={styles.noteDragGrip} aria-hidden="true">⠿</span>
+          <strong title={nodeText}>註解 · {nodeText}</strong>
+        </div>
         <div className={styles.noteTabs}>
           <button type="button" className={tab === "edit" ? styles.activeTab : ""} onClick={() => setTab("edit")}>編輯</button>
           <button type="button" className={tab === "preview" ? styles.activeTab : ""} onClick={() => setTab("preview")}>預覽</button>

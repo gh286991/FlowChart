@@ -40,6 +40,15 @@ These rules apply to every human or AI agent modifying this repository.
 - Do not synchronously replace editor values while `compositionstart`/`compositionend` is active.
 - Text editing must use a local draft and commit after composition completes or after a short debounce.
 
+## Node interaction rule
+
+- A single node click must select the node without opening a large action toolbar.
+- Full node actions should open only through an explicit affordance such as the compact `...` button, desktop context menu, or touch long press.
+- Node action menus must render outside the React Flow transform layer so they do not scale with the canvas.
+- Desktop note popovers may be moved by dragging their title bar and must remain constrained to the viewport.
+- Sidebar notes and mobile full-screen notes must stay fixed and must not become draggable.
+- Opening menus, notes, or AI must not move node positions or unexpectedly change the canvas viewport.
+
 ## Deployment compatibility
 
 - Production uses Node.js 22 and npm 10. Validate dependency changes against Node 22.

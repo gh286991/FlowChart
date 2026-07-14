@@ -240,3 +240,21 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .save-state { margin-left: 0; }
   .ai-node-panel { width: 100vw; }
 }
+
+
+/* Keep React Flow node dragging on the compositor and remove expensive visual transitions mid-drag. */
+.react-flow__node {
+  touch-action: none;
+}
+
+.react-flow__node.dragging {
+  z-index: 120 !important;
+  will-change: transform;
+}
+
+.react-flow__node.dragging .mind-node,
+.react-flow__node.dragging .mind-node-selected {
+  transform: none;
+  transition: none;
+  box-shadow: 0 5px 15px rgba(30, 45, 75, .12);
+}

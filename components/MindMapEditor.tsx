@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import {
   Background,
@@ -13,6 +13,7 @@ import {
   type Edge,
   type Node,
   type NodeProps,
+  useNodesState,
   useReactFlow,
 } from "@xyflow/react";
 import MapAiPanel from "@/components/MapAiPanel";
@@ -56,7 +57,7 @@ type MindNodeData = {
   onNoteChange: (nodeId: string, markdown: string) => void;
 };
 
-function MindNodeCard({ data, selected }: NodeProps<Node<MindNodeData>>) {
+const MindNodeCard = memo(function MindNodeCard({ data, selected }: NodeProps<Node<MindNodeData>>) {
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
@@ -137,7 +138,7 @@ function MindNodeCard({ data, selected }: NodeProps<Node<MindNodeData>>) {
       )}
     </div>
   );
-}
+});
 
 function toFlowEdges(data: MindMapData): Edge[] {
   const nodeById = new Map(data.nodes.map((node) => [node.id, node]));
@@ -184,6 +185,7 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
   const [mapAiOpen, setMapAiOpen] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draggingRef = useRef(false);
   const { fitView } = useReactFlow();
 
   const nodeTypes = useMemo(() => ({ mind: MindNodeCard }), []);
@@ -314,9 +316,10 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     updateData(next, true, nextTitle);
   }, [title, updateData]);
 
-  const flowNodes = useMemo<Node<MindNodeData>[]>(() => mapData.nodes.map((node) => ({
+  const projectedNodes = useMemo<Node<MindNodeData>[]>(() => mapData.nodes.map((node) => ({
     id: node.id,
     type: "mind",
+    selected: node.id === selectedId,
     position: { x: node.x, y: node.y },
     draggable: sidebarNoteId === null,
     zIndex: node.id === expandedNoteId ? 80 : node.id === selectedId ? 30 : 1,
@@ -357,6 +360,13 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
     toggleNote,
     updateNodeNote,
   ]);
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node<MindNodeData>>(projectedNodes);
+
+  useEffect(() => {
+    if (draggingRef.current) return;
+    setFlowNodes(projectedNodes);
+  }, [projectedNodes, setFlowNodes]);
+
   const flowEdges = useMemo(() => toFlowEdges(mapData), [mapData]);
 
   const arrange = useCallback((layoutMode = mapData.layoutMode) => {
@@ -438,7 +448,8 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
 
       <main className="editor-canvas">
         <ReactFlow
-          nodes={flowNodes.map((node) => ({ ...node, selected: node.id === selectedId }))}
+          nodes={flowNodes}
+          onNodesChange={onNodesChange}
           edges={flowEdges}
           nodeTypes={nodeTypes}
           onNodeClick={(_, node) => setSelectedId(node.id)}
@@ -447,7 +458,12 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
             setSelectedId(node.id);
             renameNode(node.id);
           }}
+          onNodeDragStart={(_, dragged) => {
+            draggingRef.current = true;
+            setSelectedId(dragged.id);
+          }}
           onNodeDragStop={(_, dragged) => {
+            draggingRef.current = false;
             const nextData = {
               ...mapData,
               nodes: mapData.nodes.map((node) => node.id === dragged.id
@@ -462,6 +478,8 @@ function EditorCanvas({ initialMap }: { initialMap: EditorMap }) {
           maxZoom={2}
           panOnDrag
           selectionOnDrag={false}
+          nodeDragThreshold={1}
+          onlyRenderVisibleElements={mapData.nodes.length > 80}
           nodesConnectable={false}
           proOptions={{ hideAttribution: true }}
         >

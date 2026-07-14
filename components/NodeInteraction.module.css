@@ -545,3 +545,208 @@
     max-height: 62%;
   }
 }
+
+
+/* Compact node actions: selection stays quiet until the user asks for actions. */
+.nodeQuickAdd,
+.nodeMoreTrigger {
+  position: absolute;
+  z-index: 120;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #c9d3e4;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .98);
+  color: #3c4b67;
+  box-shadow: 0 8px 20px rgba(31, 42, 68, .18);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.nodeQuickAdd:hover,
+.nodeMoreTrigger:hover {
+  border-color: #8fa2ff;
+  background: #eef2ff;
+  color: #3046c0;
+}
+
+.nodeQuickAdd {
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+}
+
+.nodeQuickAddRight { right: -17px; }
+.nodeQuickAddLeft { left: -17px; }
+
+.nodeMoreTrigger {
+  top: -13px;
+  right: -13px;
+  font-size: 18px;
+}
+
+.nodeMenuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 720;
+  border: 0;
+  background: transparent;
+}
+
+.nodeMenu {
+  position: fixed;
+  z-index: 730;
+  width: 224px;
+  overflow: hidden;
+  border: 1px solid #d4dcea;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 68px rgba(31, 42, 68, .26);
+  color: #172033;
+}
+
+.nodeMenuHeader {
+  display: grid;
+  gap: 2px;
+  padding: 11px 12px 9px;
+  border-bottom: 1px solid #e6eaf2;
+  background: #f8faff;
+}
+
+.nodeMenuHeader span {
+  color: #7a8498;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.nodeMenuHeader strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.nodeMenuGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 8px;
+}
+
+.nodeMenuGrid button {
+  min-height: 78px;
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  align-content: center;
+  gap: 2px 6px;
+  padding: 9px;
+  border: 1px solid #e1e6ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #344054;
+  text-align: left;
+}
+
+.nodeMenuGrid button:hover {
+  border-color: #aebcff;
+  background: #f3f5ff;
+}
+
+.nodeMenuGrid button > span {
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: #4055cb;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.nodeMenuGrid button strong { font-size: 11px; }
+.nodeMenuGrid button small { color: #7a8498; font-size: 9px; line-height: 1.3; }
+
+.nodeMenuSecondary {
+  display: grid;
+  gap: 2px;
+  padding: 4px 8px 8px;
+  border-top: 1px solid #eef1f5;
+}
+
+.nodeMenuSecondary button {
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #475467;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.nodeMenuSecondary button:hover { background: #f2f5fa; }
+.nodeMenuSecondary .nodeMenuDanger { color: #c9364f; }
+
+.noteDragHandle {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.noteDragHandle:active { cursor: grabbing; }
+
+.noteDragGrip {
+  flex: 0 0 auto;
+  color: #99a4b8;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.noteDragHandle strong {
+  min-width: 0;
+  flex: 1;
+}
+
+@media (max-width: 760px) {
+  .nodeMenuBackdrop { background: rgba(16, 24, 40, .38); }
+
+  .nodeMenu {
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    width: 100vw;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    box-shadow: 0 -18px 55px rgba(16, 24, 40, .25);
+  }
+
+  .nodeMenuHeader { padding: 14px 16px 11px; }
+  .nodeMenuGrid { gap: 8px; padding: 10px 12px; }
+  .nodeMenuGrid button { min-height: 82px; }
+  .nodeMenuSecondary { padding: 5px 12px 8px; }
+  .nodeMenuSecondary button { min-height: 44px; }
+
+  .nodeQuickAdd,
+  .nodeMoreTrigger {
+    width: 34px;
+    height: 34px;
+  }
+
+  .noteDragHandle {
+    cursor: default;
+    touch-action: auto;
+  }
+
+  .noteDragGrip { display: none; }
+}

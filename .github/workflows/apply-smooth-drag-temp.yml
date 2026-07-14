@@ -1,0 +1,37 @@
+name: Apply smooth drag patch (temporary)
+
+on:
+  push:
+    branches:
+      - fix/floating-node-ai-dialog
+    paths:
+      - .github/workflows/apply-smooth-drag-temp.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/floating-node-ai-dialog
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply smooth drag patch
+        run: node scripts/apply-smooth-drag-patch.mjs
+      - name: Verify changes
+        run: |
+          npm ci
+          npm run type-check
+          npm run build
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/MindMapEditor.tsx app/globals.css
+          git commit -m "perf: smooth React Flow node dragging"
+          git push origin HEAD:fix/floating-node-ai-dialog
